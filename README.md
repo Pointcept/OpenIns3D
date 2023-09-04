@@ -38,8 +38,8 @@
     <td><img src="demo/demo_6.gif" width="100%"/></td>
 </tr>
 <tr>
-    <td align='center' width='24%'>penciling down ideas during brainstorming</td>
     <td align='center' width='24%'>most comfortable area to sit in the room</td>
+    <td align='center' width='24%'>penciling down ideas during brainstorming</td>
     <td align='center' width='24%'>furniture offers recreational enjoyment with friends</td>
 <tr>
 </table>
