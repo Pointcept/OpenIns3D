@@ -15,7 +15,7 @@
     <a href="http://sigproc.eng.cam.ac.uk/Main/JL"><strong>Joan Lasenby</strong></a>
   </p>
   
-  <h3 align="center"><a href="https://arxiv.org/abs/2309.00616">Paper</a> | <a href="https://zheninghuang.github.io/OpenIns3D/">Video(Soon)</a> | <a href="https://zheninghuang.github.io/OpenIns3D/">Project Page</a></h3>
+  <h3 align="center"><a href="https://arxiv.org/abs/2309.00616">Paper</a> | <a href="https://www.youtube.com/watch?v=kwlMJkEfTyY">Video</a> | <a href="https://zheninghuang.github.io/OpenIns3D/">Project Page</a></h3>
   <div align="center"></div>
 </p>
 
