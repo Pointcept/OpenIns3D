@@ -19,7 +19,16 @@
   <div align="center"></div>
 </p>
 
+<p align="center">
+<strong> TL;DR: OpenIns3D is a powerful, 2D input-free, fast-evolving, complex-input-handling framework for 3D open-world scene understanding.
+</p>
 
+## 2D-input-free framework
+
+<img src="demo/2D-input-free.png" width="100%"/>
+
+
+## Complex-input-handling
 
 <table>
 <tr>
@@ -44,14 +53,15 @@
 <tr>
 </table>
 
-<p align="center">
-<strong> OpenIns3D is a 2D input-free, easily adaptive, and fast-evolving framework for open-vocabulary scene understanding at the instance level.
-</p>
+
 <br>
 
+## OpenIns3D pipeline
+
+<img src="demo/general_pipeline_updated.png" width="100%"/>
 
 ## Highlights
-- *Sep, 2023*: **OpenIns3D** is released on arXiv, we will release our code soon.
+- *Sep, 2023*: **OpenIns3D** is released on [arXiv](https://arxiv.org/abs/2309.00616), alongside with [explanatory video](https://www.youtube.com/watch?v=kwlMJkEfTyY), [project page](https://zheninghuang.github.io/OpenIns3D/). We will release the code in early October.
 
 
 ## Citation
