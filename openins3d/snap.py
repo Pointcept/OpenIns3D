@@ -512,6 +512,7 @@ def save_results_2d(scan_pc, image_width, image_height, scene_name, folder_saved
     detected_mask_bin, detected_label = detection_results
     
     # colorcode masks
+    scan_pc = scan_pc.float()
     color_list_save = []
     for idx_mask in range(detected_mask_bin.shape[1]):
         indices = detected_mask_bin[:, idx_mask]!=0
