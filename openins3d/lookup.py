@@ -164,8 +164,18 @@ def normalize_scores(predict_score, predict_list):
     sorted_data = [grouped_data[rank]  for rank in predict_ranks]
     return predict_ranks, sorted_data
 
-def mask_classfication(mask_bin, all_point, scene_id, width, height, SNAP_location, Lookup_location, final_results,  CLASS_LABELS, VALID_CLASS_IDS ):
+def mask_classfication(mask_bin, all_point, adjust_camera, scene_id, width, height, SNAP_location, Lookup_location, final_results,  CLASS_LABELS, VALID_CLASS_IDS ):
     
+    lift_cam, zoomout, remove_lip = adjust_camera
+    
+    # get rid of lip
+    z_max = all_point[:, 2].max()
+    idx_remained = all_point[:, 2] <= (z_max - remove_lip)
+
+    mask_bin_original = mask_bin.clone()
+
+    mask_bin = mask_bin[idx_remained, :]
+    all_point = all_point[idx_remained, :]
     # number of mask
     num_mask = mask_bin.shape[1]
 
@@ -232,7 +242,7 @@ def mask_classfication(mask_bin, all_point, scene_id, width, height, SNAP_locati
     for mask_idx in range(0, num_mask):
         labels_list.append(mask2pixel_lookup[mask_idx])
         confidences_list.append(mask2pixel_lookup_score[mask_idx])
-        masks_binary_list.append(mask_bin[:, mask_idx])
+        masks_binary_list.append(mask_bin_original[:, mask_idx])
 
     with open(os.path.join(save_path, f'{scene_id}.txt'), 'w') as f:
         for i, (l, c, m) in enumerate(zip(labels_list, confidences_list, masks_binary_list)):

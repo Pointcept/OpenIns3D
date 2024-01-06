@@ -88,3 +88,40 @@ def save_visulization_3d(original_pcd, vocab, mask_after_MPM, detected_mask, mas
     if save_ply:
         writeply(f'{save_path}/{scene_id}/all_mask.ply',original_pcd[:, :3],all_mask_colorcoded)
         writeply(f'{save_path}/{scene_id}/detected_mask.ply',original_pcd[:, :3],detected_mask_colorcoded)
+
+
+def save_visulization_3d_viz(original_pcd, mask_after_MPM, scene_id, save_path):
+    v = viz.Visualizer()
+    rgb = original_pcd[:,3:6]
+    num_mask = mask_after_MPM.shape[1]
+    all_mask_colorcoded = rgb.clone()
+    for i in range (num_mask):
+        mask = mask_after_MPM[:,i]
+        random_color = lambda: random.randint(0, 255)
+        all_mask_colorcoded[mask,:] = torch.tensor([random_color(), random_color(), random_color()]).float()
+    v.add_points(f'{scene_id[:6]}_masks', original_pcd[:, :3].numpy(), all_mask_colorcoded.numpy(), point_size=30, visible=True)
+    v.save(f'{save_path}/{scene_id}/viz')
+
+
+def generate_detection_results(mask2pixel_lookup, binary_mask, CLASS_LABELS, VALID_CLASS_IDS):
+    detected_mask_idx = []
+    detected_label = []
+    detected_label_id = []
+    for mask_idx in mask2pixel_lookup.keys():
+        if mask2pixel_lookup[mask_idx] != None:
+            detected_mask_idx.append(mask_idx)
+            detected_label.append(CLASS_LABELS[VALID_CLASS_IDS.index(mask2pixel_lookup[mask_idx])])
+            detected_label_id.append(mask2pixel_lookup[mask_idx])
+            
+    detected_mask_bin = binary_mask[:, detected_mask_idx]
+
+    labels_list = []
+    masks_binary_list = []
+
+    num_mask = binary_mask.shape[1]
+    for mask_idx in range(0, num_mask):
+        labels_list.append(mask2pixel_lookup[mask_idx])
+        masks_binary_list.append(binary_mask[:, mask_idx])
+
+    detection_results = (detected_mask_bin, detected_label)
+    return detection_results, detected_label_id

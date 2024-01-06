@@ -12,32 +12,9 @@ import pyviz3d.visualizer as viz
 import argparse
 import sys
 sys.path.append("./ODISE")
-from openins3d.utils import save_visulization_3d
-from openins3d.mask.mask3d import get_model, load_mesh, prepare_data, map_output_to_pointcloud, save_colorized_mesh, prepare_data_pcd
+from openins3d.utils import save_visulization_3d, generate_detection_results
+from openins3d.mask3d import get_model, load_mesh, prepare_data, map_output_to_pointcloud, save_colorized_mesh, prepare_data_pcd
 import torch
-
-def generate_detection_results(mask2pixel_lookup, binary_mask, CLASS_LABELS, VALID_CLASS_IDS):
-    detected_mask_idx = []
-    detected_label = []
-    detected_label_id = []
-    for mask_idx in mask2pixel_lookup.keys():
-        if mask2pixel_lookup[mask_idx] != None:
-            detected_mask_idx.append(mask_idx)
-            detected_label.append(CLASS_LABELS[VALID_CLASS_IDS.index(mask2pixel_lookup[mask_idx])])
-            detected_label_id.append(mask2pixel_lookup[mask_idx])
-            
-    detected_mask_bin = binary_mask[:, detected_mask_idx]
-
-    labels_list = []
-    masks_binary_list = []
-
-    num_mask = binary_mask.shape[1]
-    for mask_idx in range(0, num_mask):
-        labels_list.append(mask2pixel_lookup[mask_idx])
-        masks_binary_list.append(binary_mask[:, mask_idx])
-
-    detection_results = (detected_mask_bin, detected_label)
-    return detection_results, detected_label_id
 
 
 
@@ -138,7 +115,7 @@ if __name__ == "__main__":
     build_lookup_dict_one_scene(odise_model, scene_id, snap_save_path, lookup_save_path)
     print("mask2pixel lookup:")
     # mask2pixel lookup
-    mask2pixel_lookup, _ = mask_classfication(binary_mask, scan_pc, scene_id, height, width, snap_save_path, lookup_save_path, result_mask_save_path, CLASS_LABELS, VALID_CLASS_IDS)
+    mask2pixel_lookup, _ = mask_classfication(binary_mask, scan_pc, adjust_camera, scene_id, height, width, snap_save_path, lookup_save_path, result_mask_save_path, CLASS_LABELS, VALID_CLASS_IDS)
 
     # save and visulizize the results
     detection_results, detected_label_id = generate_detection_results(mask2pixel_lookup, binary_mask, CLASS_LABELS, VALID_CLASS_IDS)
