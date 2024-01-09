@@ -15,7 +15,7 @@ from datasets.random_cuboid import RandomCuboid
 import albumentations as A
 import numpy as np
 import scipy
-import volumentations as V
+# import volumentations as V
 import yaml
 
 from yaml import CLoader as Loader
@@ -161,6 +161,7 @@ class SemanticSegmentationDataset(Dataset):
 
         self.mode = mode
         self.data_dir = data_dir
+
         self.add_unlabeled_pc = add_unlabeled_pc
         if add_unlabeled_pc:
             self.other_database = self._load_yaml(
@@ -243,7 +244,7 @@ class SemanticSegmentationDataset(Dataset):
             color_mean, color_std = color_mean_std[0], color_mean_std[1]
 
         # augmentations
-        self.volume_augmentations = V.NoOp()
+        # self.volume_augmentations = V.NoOp()
         if (volume_augmentations_path is not None) and (
             volume_augmentations_path != "none"
         ):

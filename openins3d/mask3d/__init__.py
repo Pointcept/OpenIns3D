@@ -3,7 +3,8 @@ import torch
 
 import sys
 
-sys.path.append("/home/zelda/zh340/myzone/test/OpenIns3D_local/openins3d/mask")
+sys.path.append("./openins3d")
+
 from mask3d.models.mask3d import Mask3D
 from mask3d.utils.utils import (
     load_checkpoint_with_missing_or_exsessive_keys,

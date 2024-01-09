@@ -113,7 +113,7 @@ cd ODISE
 pip install -e .
 cd ..
 
-pip install torch_scatter gdown loguru open3d plyfile pyviz3d python-dotenv volumentations omegaconf==2.1.1 iopath==0.1.8
+pip install torch_scatter gdown loguru open3d plyfile pyviz3d python-dotenv omegaconf==2.1.1 iopath==0.1.8
 ```
 
 

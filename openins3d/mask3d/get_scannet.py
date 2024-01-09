@@ -59,7 +59,6 @@ def get_class_agnostic_masks_scannet(cfg: DictConfig):
 
 @hydra.main(config_path="conf", config_name="config_scannet.yaml")
 def main(cfg: DictConfig):
-    print("----data.test_dataset.data_dir", cfg.data.test_dataset.data_dir)
     get_class_agnostic_masks_scannet(cfg)
 
 if __name__ == "__main__":

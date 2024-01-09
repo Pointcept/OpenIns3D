@@ -5,8 +5,8 @@ export PYTHONPATH="openins3d"
 CURR_AREA=5  # please set this to Area 5
 
 # please provide pathes for the following:
-S3DIS_PROCESSED_DIR="~/OpenIns3d/data/processed/s3dis" # copy the full path for the processed
-MPM_CHECKPOINT="checkpoints/download_models/s3dis_area5.ckpt"
+S3DIS_PROCESSED_DIR="processed/s3dis" # copy the full path for the processed
+MPM_CHECKPOINT="area5_from_scratch.ckpt"
 
 # Corresponding paths; no need to change unless preprocessing was not followed completely
 PROJECT_SAVE_FOLDER="s3dis_saved"
@@ -18,7 +18,7 @@ S3DIS_GT_PATH="${S3DIS_PROCESSED_DIR%/}/instance_gt/Area_${CURR_AREA}"
 
 # OpenIns3D start
 
-# step 1: obtained Class-agnostic mask from Mask proposal module
+step 1: obtained Class-agnostic mask from Mask proposal module
 echo "[******OpenIns3D INFO*******] Mask Proposal"
 
 python openins3d/mask3d/get_s3dis.py \
@@ -36,24 +36,24 @@ python openins3d/mask3d/get_s3dis.py \
     data.test_dataset.label_db_filepath=${S3DIS_LABEL_DB_PATH}  \
     general.mask_save_dir=${MASK_SAVE_DIR} 
 
-# echo "[******OpenIns3D INFO*******] Mask Proposal is done and class-agonstic masks are saved"
+echo "[******OpenIns3D INFO*******] Mask Proposal is done and class-agonstic masks are saved"
 
-# # step 2: obtain and save mask classfication with Snap & Lookup module
-# echo "[******OpenIns3D INFO*******] Snap and Lookup"
-# python inference_openins3d.py \
-#     --processed_scene "${S3DIS_PROCESSED_DIR%/}/Area_${CURR_AREA}" \
-#     --img_size 1000 \
-#     --result_save ${FINAL_RESULT_FOLDER} \
-#     --byproduct_save ${PROJECT_SAVE_FOLDER} \
-#     --ca_mask_path ${MASK_SAVE_DIR} \
-#     --save_results_in_2d false \
-#     --dataset s3dis
-# echo "[******OpenIns3D INFO*******] Snap and Lookup is done and detection results are saved"
+# step 2: obtain and save mask classfication with Snap & Lookup module
+echo "[******OpenIns3D INFO*******] Snap and Lookup"
+python inference_openins3d.py \
+    --processed_scene "${S3DIS_PROCESSED_DIR%/}/Area_${CURR_AREA}" \
+    --img_size 1000 \
+    --result_save ${FINAL_RESULT_FOLDER} \
+    --byproduct_save ${PROJECT_SAVE_FOLDER} \
+    --ca_mask_path ${MASK_SAVE_DIR} \
+    --save_results_in_2d false \
+    --dataset s3dis
+echo "[******OpenIns3D INFO*******] Snap and Lookup is done and detection results are saved"
 
-# # step 3: evluate the results
-# python evaluate.py \
-#     --result_save ${FINAL_RESULT_FOLDER} \
-#     --gt_path ${S3DIS_GT_PATH} \
-#     --dataset s3dis
+# step 3: evluate the results
+python evaluate.py \
+    --result_save ${FINAL_RESULT_FOLDER} \
+    --gt_path ${S3DIS_GT_PATH} \
+    --dataset s3dis
 
-# echo "[******OpenIns3D INFO*******] ALL Finished"
+echo "[******OpenIns3D INFO*******] ALL Finished"
