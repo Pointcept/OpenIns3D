@@ -54,7 +54,7 @@ if __name__ == "__main__":
         CLASS_LABELS = ['cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture']
         VALID_CLASS_IDS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39]
     elif dataset == "s3dis":
-        val_scenes = [scene.split("/")[-1].split(".")[0].split("_5_")[1].split("_masks")[0] for scene in val_scenes_path_list]
+        val_scenes = [scene.split("/")[-1].split(".")[0].split("rea_5_")[1].split("_masks")[0] for scene in val_scenes_path_list]
         vocab = "ceiling; floor; wall; beam; column; window; door; table; chair; sofa; bookcase; board"
         CLASS_LABELS = ['ceiling', 'floor', 'wall', 'beam', 'column', 'window', 'door', 'table', 'chair', 'sofa', 'bookcase', 'board']
         VALID_CLASS_IDS = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]).tolist()
