@@ -21,9 +21,8 @@
 
    
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/zero-shot-3d-point-cloud-classification-on-1)](https://paperswithcode.com/sota/zero-shot-3d-point-cloud-classification-on-1?p=openins3d-snap-and-lookup-for-3d-open) [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/3d-open-vocabulary-instance-segmentation-on-3)](https://paperswithcode.com/sota/3d-open-vocabulary-instance-segmentation-on-3?p=openins3d-snap-and-lookup-for-3d-open)
-
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/3d-open-vocabulary-instance-segmentation-on-1)](https://paperswithcode.com/sota/3d-open-vocabulary-instance-segmentation-on-1?p=openins3d-snap-and-lookup-for-3d-open) [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/3d-open-vocabulary-object-detection-on-1)](https://paperswithcode.com/sota/3d-open-vocabulary-object-detection-on-1?p=openins3d-snap-and-lookup-for-3d-open)
-
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/3d-open-vocabulary-object-detection-on-1)](https://paperswithcode.com/sota/3d-open-vocabulary-object-detection-on-1?p=openins3d-snap-and-lookup-for-3d-open)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/openins3d-snap-and-lookup-for-3d-open/3d-open-vocabulary-instance-segmentation-on-1)](https://paperswithcode.com/sota/3d-open-vocabulary-instance-segmentation-on-1?p=openins3d-snap-and-lookup-for-3d-open)
 <p align="center">
 <strong> TL;DR: OpenIns3D proposes a "mask-snap-lookup" scheme to achieve 2D-input-free 3D open-world scene understanding, which attains SOTA performance across datasets, even with fewer input prerequisites. 🚀✨
 </p>
