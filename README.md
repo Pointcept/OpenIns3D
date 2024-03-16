@@ -117,7 +117,7 @@ cd ODISE
 pip install -e .
 cd ..
 
-pip install torch_scatter gdown loguru open3d plyfile pyviz3d python-dotenv omegaconf==2.1.1 iopath==0.1.8
+pip install torch_scatter gdown==v4.6.3 loguru open3d plyfile pyviz3d python-dotenv omegaconf==2.1.1 iopath==0.1.8
 ```
 
 
@@ -133,8 +133,11 @@ To achieve zero-shot scene understanding with **OpenIns3D**, follow these two st
 We provide several sample datasets from `Replica`, `Mattarport3d`, and `S3DIS`, `Scannet` for quick testing. Run the following code to download demo data
 
 ```bash
+pip install gdown==v4.6.3
 cd demo; python download_demo_scenes.py
 ```
+
+(If you are experiencing issues downloading the demo scene files, please ensure that you have the correct version of gdown)
 
 Example of testing:
  
