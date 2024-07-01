@@ -61,6 +61,7 @@
 
 
 # Highlights
+- *1 Jul, 2024*: OpenIns3D has been accepted at ECCV 2024 🎉. We will release more code on various experiments soon.
 - *6 Jan, 2024*: We have released a major revision, incorporating S3DIS and ScanNet benchmark code. Try out the latest version [here](#benchmarking-on-scannetv2-and-s3dis) 🔥🔥.
 - *31 Dec, 2023* We release the [batch inference code on ScanNet](#benchmarking-on-scannetv2-and-s3dis).
 - *31 Dec, 2023* We release the [zero-shot inference code](#zero-shot-scene-understanding)， test it on your own data!
