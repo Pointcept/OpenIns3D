@@ -10,6 +10,7 @@
     <a href="https://xavierchen34.github.io/"><strong>Xi Chen</strong></a>
     ·
     <a href="https://hszhao.github.io"><strong>Hengshuang Zhao</strong></a>
+    ·
     <a href="https://sites.google.com/site/indexlzhu/home"><strong>Lei Zhu</strong></a>
     ·
     <a href="http://sigproc.eng.cam.ac.uk/Main/JL"><strong>Joan Lasenby</strong></a>
