@@ -55,205 +55,198 @@
 
 <br>
 
-# OpenIns3D pipeline
+<!-- # OpenIns3D pipeline
 
-<img src="assets/general_pipeline_updated.png" width="100%"/>
-
+<img src="assets/general_pipeline_updated.png" width="100%"/> -->
 
 
 # Highlights
+- *2 Aug, 2024*: Major update 🔥: We have released optimized and easy-to-use code for OpenIns3D to [reproduce all the results in the paper](#Reproducing-Results).
 - *1 Jul, 2024*: OpenIns3D has been accepted at ECCV 2024 🎉. We will release more code on various experiments soon.
-- *6 Jan, 2024*: We have released a major revision, incorporating S3DIS and ScanNet benchmark code. Try out the latest version [here](#benchmarking-on-scannetv2-and-s3dis) 🔥🔥.
-- *31 Dec, 2023* We release the [batch inference code on ScanNet](#benchmarking-on-scannetv2-and-s3dis).
-- *31 Dec, 2023* We release the [zero-shot inference code](#zero-shot-scene-understanding)， test it on your own data!
+- *6 Jan, 2024*: We have released a major revision, incorporating S3DIS and ScanNet benchmark code. Try out the latest version.
+- *31 Dec, 2023* We release the batch inference code on ScanNet.
+- *31 Dec, 2023* We release the zero-shot inference code， test it on your own data!
 - *Sep, 2023*: **OpenIns3D** is released on [arXiv](https://arxiv.org/abs/2309.00616), alongside with [explanatory video](https://www.youtube.com/watch?v=kwlMJkEfTyY), [project page](https://zheninghuang.github.io/OpenIns3D/). We will release the code at end of this year.
 
 # Overview
 
 - [Installation](#installation)
-- [Zero-Shot Scene Understanding](#zero-shot-scene-understanding)
-- [Benchmarking on ScanNetv2 and S3DIS](#benchmarking-on-scannetv2-and-s3dis)
+- [Reproducing Results](#Reproducing-Results)
+- [Zero shot understanding](#zero-shot-scene-understanding)
 - [Citation](#citation)
 - [Acknowledgement](#acknowledgement)
 
 
 # Installation
 
-## Requirements
+Please check the [installation file](installation.md) to install OpenIns3D for:
 
-- CUDA: 11.6
-- PyTorch: 11.3
-- Hardware: one 24G memory GPU or better
+1. [reproducing all results in the paper](#reproduce-of-results),
+2. [testing on your own dataset](#zero-shot-scene-understanding), or
+3. using part of the model (e.g., Snap/Snap-Lookup) for your own tasks.
 
-(Note: that several scenes in S3DIS are very large and may lead to RAM collapse if 24GB GPU is used)
+We have detailed the level of installation needed for different purposes.
 
-## Setup 
+---
 
-Install dependencies by running:
+# Reproducing Results
 
-```bash
-conda create -n openins3d python=3.9
-conda activate openins3d
+### Replica
 
-conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
-conda install pytorch3d -c pytorch3d
-conda install lightning -c conda-forge
-conda install -c "nvidia/label/cuda-11.6.1" libcusolver-dev
-python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
-conda install nltk
-
-cd third_party/pointnet2
-python setup.py install
-cd ../
-
-# install MinkowskiEngine for MPM
-git clone --recursive "https://github.com/NVIDIA/MinkowskiEngine" # clone the repo to third_party
-cd MinkowskiEngine
-git checkout 02fc608bea4c0549b0a7b00ca1bf15dee4a0b228
-python setup.py install --force_cuda --blas=openblas
-cd ../../
-
-# install ODISE as 2D detectors
-git clone https://github.com/NVlabs/ODISE.git
-cd ODISE
-pip install -e .
-cd ..
-
-pip install torch_scatter gdown==v4.6.3 loguru open3d plyfile pyviz3d python-dotenv omegaconf==2.1.1 iopath==0.1.8
+**Data Preparation**: Execute the following command to set up the Replica dataset, including scene `.ply` files, predicted masks, and ground truth:
+```sh
+sh scripts/prepare_replica.sh
 ```
+
+**Instance Segmentation**:
+```sh
+python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
+```
+
+| Task                        |  AP  | AP50 | AP25 | Log |
+|-----------------------------|:----:|:----:|:----:|:----:|
+| Replica OVIS (in paper)      | 13.6 | 18.0 | 19.7 |      |
+| Replica OVIS (this Code)     | 15.4 | 20.9 | 27.2 | [log](assets/logs/log_replica_ovis.txt)  |
+
+---
+
+### ScanNet
+
+**Data Preparation**: 
+1. Make sure you have completed the form on [ScanNet](http://www.scan-net.org/) to obtain access.
+2. Place the `download-scannet.py` script into the `scripts` directory.
+3. Run the following command to download all `_vh_clean_2.ply` files for validation sets, as well as instance ground truth, GT-masks, and detected masks:
+
+```sh
+sh scripts/prepare_scannet.sh
+```
+
+**Object Recognition**: 
+```sh
+python openins3d/main.py --dataset scannet --task OVOR --detector odise
+```
+
+| Task                        | Top-1 Accuracy | Log |
+|-----------------------------|:--------------:|:----:|
+| ScanNet_OVOR (in paper)      |     60.4       |      |
+| ScanNet_OVOR (this Code)     |     64.2       | [log](assets/logs/log_scannet_classfication.txt)  |
+
+
+**Object Detection**:
+```sh
+python openins3d/main.py --dataset scannet --task OVOD --detector odise
+```
+
+**Instance Segmentation**:
+```sh
+python openins3d/main.py --dataset scannet --task OVIS --detector odise
+```
+
+| Task                        |  AP  | AP50 | AP25 | Log |
+|-----------------------------|:----:|:----:|:----:|:----:|
+| ScanNet_OVOD (in paper)      | 17.8 | 28.3 | 36.0 |      |
+| ScanNet_OVOD (this Code)     | 20.7 | 29.9 | 39.7 | [log](assets/logs/log_scannet_ovod.txt)  |
+| ScanNet_OVIS (in paper)      | 19.9 | 28.7 | 38.9 |      |
+| ScanNet_OVIS (this Code)     | 23.3 | 34.6 | 42.6 | [log](assets/logs/log_scannet_ovis.txt)  |
+
+
+---
+
+### S3DIS
+
+**Data Preparation**: Make sure you have completed the form on [S3DIS](https://redivis.com/datasets/9q3m-9w5pa1a2h/files) to obtain access. Then, run the following command to acquire scene `.ply` files, predicted masks, and ground truth:
+```sh
+sh scripts/prepare_s3dis.sh
+```
+
+**Instance Segmentation**:
+```sh
+python openins3d/main.py --dataset s3dis --task OVIS --detector odise
+```
+
+| Task                        |  AP  | AP50 | AP25 | Log |
+|-----------------------------|:----:|:----:|:----:|:----:|
+| S3DIS OVIS (in paper)        | 21.1 | 28.3 | 29.5 |      |
+| S3DIS OVIS (this Code)       | 22.9 | 29.0 | 31.4 | [log](assets/logs/log_s3dis_ovis.txt)  |
+
+---
+
+### STPLS3D
+
+**Data Preparation**: Make sure you have completed the form [STPLS3D](https://www.stpls3d.com/data) to gain access. Then, run the following command to obtain scene `.ply` files, predicted masks, and ground truth:
+```sh
+sh scripts/prepare_stpls3d.sh
+```
+
+
+**Instance Segmentation**:
+```sh
+python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
+```
+
+| Task                        |   AP   | AP50  | AP25  | Log |
+|-----------------------------|:------:|:-----:|:-----:|:----:|
+| STPLS3D OVIS (in paper)      | 11.4  | 14.2 | 17.2 |      |
+| STPLS3D OVIS (this Code)     |  15.3      | 17.3   | 17.4      | [log](assets/logs/log_stpls3d_ovis.txt)  |
+
+---
 
 
 # Zero-Shot Scene Understanding
- 
-To achieve zero-shot scene understanding with **OpenIns3D**, follow these two steps:
- 
-1. Download Checkpoint for Mask Proposal Module: 
-   - we recommend downloading scannet200_val.ckpt [here](https://drive.google.com/file/d/1emtZ9xCiCuXtkcGO3iIzIRzcmZAFfI_B/view) and placing it under `checkpoints/`.
 
-2. Run `python zero_shot.py` by specifying a) `pcd_path`: the path of the colored point cloud. b）`vocab`: vocabulary list that is searching for. [ODISE](https://github.com/NVlabs/ODISE) is the 2D detector, so the format of vocab is followed ODISE
+Note: Make sure you have installed the mask module according to installation, as it is not required for reproduing results.
 
-We provide several sample datasets from `Replica`, `Mattarport3d`, and `S3DIS`, `Scannet` for quick testing. Run the following code to download demo data
+To perform zero-shot scene understanding:
+1. Download the `scannet200_val.ckpt` checkpoint from [this link](https://drive.google.com/file/d/1emtZ9xCiCuXtkcGO3iIzIRzcmZAFfI_B/view) and place it in the `third_party/` directory.
+
+2. To run the model, execute `python zero_shot.py` and specify:
+   - `pcd_path`: The path to the colored point cloud file.
+   - `vocab`: A list of vocabulary terms to search for.
+
+You can also use the following script to automatically set up the `scannet200_val.ckpt` checkpoint and download some sample 3D scans:
 
 ```bash
-pip install gdown==v4.6.3
-cd demo; python download_demo_scenes.py
+sh scripts/prepare_zero_shot.sh
 ```
 
-(If you are experiencing issues downloading the demo scene files, please ensure that you have the correct version of gdown)
+### Running a Zero-Shot Inference
+To perform zero-shot inference using the sample dataset (default with Replica vocabulary), run:
 
-Example of testing:
- 
 ```bash
-# replica demo
+python zero_shot.py --pcd_path data/demo_scenes/demo_scene_1.ply
+```
+Results are saved under `output/snap_demo/demo_scene_1_vis/image`.
+
+
+To use different 2D detector [ODISE works better on pcd rendered images]:
+
+```bash
+python zero_shot.py --pcd_path data/demo_scenes/demo_scene_2.ply --detector yoloworld
+```
+
+If you want to specify your own vocabulary list, add it in --vocab as following
+
+```bash
 python zero_shot.py \
---pcd_path 'demo/demo_scene/replica/replica_scene3.ply' \
---vocab "lamp; blinds; chair; table; door; bowl; window; switch; bottle; indoor-plant; pillow; vase; handrail; basket; bin; shelf; tv-screen; sofa; blanket; bike; sink; bed; stair; refrigerator" \
---dataset replica
-
-# scannet demo
-python zero_shot.py \
---pcd_path 'demo/demo_scene/scannet_scene1.ply' \
---vocab "cabinet; bed; chair; sofa; table; door; window; bookshelf; picture; counter; desk; curtain; refrigerator; showercurtain; toilet; sink; bathtub" \
---dataset scannet
-
-# mattarport3d demo
-python zero_shot.py \
---pcd_path 'demo/demo_scene/mattarport3d/mp3d_scene1.ply' \
---vocab "chair; window; ceiling; picture; floor; lighting; table; cabinet; curtain; plant; shelving; sink; mirror; stairs;  counter; stool; bed; sofa; shower; toilet; TV; clothes; bathtub; blinds; board" \
---dataset mattarport3d
-
-# s3dis demo
-python zero_shot.py \
---pcd_path 'demo/demo_scene/s3dis/s3dis_scene3.npy' \
---vocab "floor; wall; beam; column; window; door; table; chair; sofa; bookcase; board" \
---dataset s3dis
-
-# cuosmtized data 
-python zero_shot.py \
---pcd_path 'path/to/your/own/3dscene' \
---vocab "vocabulary list to be used" \
+--pcd_path 'data/demo_scenes/demo_scene_4.ply' \
+--vocab "drawers" "lower table"
 ```
+---
 
-The dataset flag is only for adjusting the loading for different .ply files. For customizing the dataset, use 'scanent' as the default. Let us know if you encounter any issues! 📣
-
-## Visulize the results
-
-You can check out the detection results as well as the Snap images, Class_Lookup_Dict, and final results under `demo_saved`. 
-
-When using your coustmize dataset: 
-
-- feel free to change the three parameters [`lift_cam, zoomout, remove_lip`] under `adjust_camera` to optimise the snap images for better detection. 
-
-
-# Benchmarking on ScanNetv2 and S3DIS
-
-Here we provide instructions to reproduce the results on ScanNetv2 and S3DIS.
-
-(Note: first time run will take a while 🕙 to download checkpoint of 2D detector ODISE automatically)
-
-## ScanNetv2:
-
-1. Download [ScanNetv2](http://www.scan-net.org). (Note: No need to download the `.sens` file as 2D images are not used)
-2. Pre-process the ScanNetv2 dataset by following the same code in Mask3d, as follows:
-
-
-```bash
-python -m openins3d.mask3d.datasets.preprocessing.scannet_preprocessing preprocess \
---data_dir="PATH_TO_RAW_SCANNET_DATASET" \
---save_dir="input_data/processed/scannet" \
---git_repo="PATH_TO_SCANNET_GIT_REPO" \
---scannet200=false
-```
-
-3. Download the pre-trained Mask Proposal weights from [here](https://omnomnom.vision.rwth-aachen.de/data/mask3d/checkpoints/scannet/scannet_val.ckpt) and place it under `checkpoints`.
-
-4. Double-check three paths under `scannet_benchmark.sh`: include `SCANNET_PROCESSED_DIR`, `SCAN_PATH`, and `MPM_CHECKPOINT`. Change them accordingly. Once changes are made, run the bash file. The bash file will first generate a class-agnostic mask proposal for the 312 scenes, each maks stored as a sparse tensor. Then, Snap and Lookup modules will be implemented under `inference_openins3d.py`.  Eventually, `evaluate.py` can be called to evaluate the performance by calculating the AP values of the mask detections.
-
-```bash
-sh scannet_benchmark.sh
-```
-
-## S3DIS
-
-1. Download S3DIS data by filling out this [Google form](https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3naktRm6A8BPwAWWDv-Uhm6Shw/viewform?c=0&w=1). Download the Stanford3dDataset_v1.2.zip file and unzip it.
-
-2. Preprocess the dataset with the following code:
-
-```bash
-python -m openins3d.mask3d.datasets.preprocessing.s3dis_preprocessing preprocess \
---data_dir="PATH_TO_Stanford3dDataset_v1.2" \
---save_dir="input_data/processed/s3dis"
-```
-
-If you encounter issues in preprocessing due to bugs in the S3DIS dataset file, please refer to this [issue](https://github.com/JonasSchult/Mask3D/issues/8#issuecomment-1279535948) in the Mask3D repo to fix it.
-
-3. Download the pre-trained Mask proposal from [here](https://omnomnom.vision.rwth-aachen.de/data/mask3d/checkpoints/s3dis/scannet_pretrained/area5_scannet_pretrained.ckpt) and place it under `checkpoints`.
-
-4. Double-check two file paths under `s3dis_benchmark.sh`: include `S3DIS_PROCESSED_DIR` and `MPM_CHECKPOINT`. Change them accordingly and then run:
-
-```bash
-sh s3dis_benchmark.sh
-```
-
-(Note that several scenes in S3DIS are very large and may lead to RAM complications if 24GB is used. Large VRAM is recommended.)
-
-# To do
-- Release the batch inference code on STPLS3D
-- Release checkpoints for limited supervision on S3DIS, ScanNetV2
-- Release Evaluation Script for 3D Open-world Object Detection
 
 # Citation
 
-If you find OpenIns3D useful for your research, please cite our work as a form of encouragement. 😊
+If you find OpenIns3D and this codebase useful for your research, please cite our work as a form of encouragement. 😊
+
 ```
-@article{huang2023openins3d,
+@article{huang2024openins3d,
       title={OpenIns3D: Snap and Lookup for 3D Open-vocabulary Instance Segmentation}, 
       author={Zhening Huang and Xiaoyang Wu and Xi Chen and Hengshuang Zhao and Lei Zhu and Joan Lasenby},
-      journal={arXiv preprint},
-      year={2023}
+      journal={European Conference on Computer Vision},
+      year={2024}
     }
-```
 
+```
 
 # Acknowlegement
 

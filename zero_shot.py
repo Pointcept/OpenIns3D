@@ -5,18 +5,14 @@ Author: Zhening Huang (zh340@cam.ac.uk)
 """
 
 import torch
-from openins3d.lookup import *
-from openins3d.snap import *
-from openins3d.build_lookup_dict import *
-import pyviz3d.visualizer as viz
 import argparse
-import sys
-sys.path.append("./ODISE")
-from openins3d.utils import save_visulization_3d, generate_detection_results
-from openins3d.mask3d import get_model, load_mesh, prepare_data, map_output_to_pointcloud, save_colorized_mesh, prepare_data_pcd
+from openins3d.mask3d import get_model, load_mesh, prepare_data, map_output_to_pointcloud
 import torch
+from openins3d.lookup import Lookup
+from openins3d.snap import Snap
+from openins3d.utils import get_label_and_ids
 
-
+import numpy as np
 
 def get_args():
     
@@ -25,100 +21,63 @@ def get_args():
     parser = argparse.ArgumentParser(
         description='OpenIns3D')
 
-    parser.add_argument('--pcd_path', default="demo_scene/replica/frl_apartment_1_mesh.ply", type=str, help='the path of the colored point cloud')
-    parser.add_argument('--img_size', default=[1000,1000], help='size of snap images')
-    parser.add_argument('--MPM_checkpoint', default="checkpoints/scannet200_val.ckpt", type=str, help='the path of MPM_checkpoint')
-    parser.add_argument('--vocab', default="cabinet; bed; chair; sofa; table; door; window; bookshelf; picture; counter; desk; curtain; refrigerator; showercurtain; toilet; sink; bathtub", help= "simliar to ODISE, this is in format 'a1,a2;b1,b2', where a1,a2 are synonyms vocabularies for the first class")
-    parser.add_argument('--result_save', default="demo_results", type=str, help='Where to save the pcd results')
-    parser.add_argument('--dataset', default="scannet", type=str, help='where to save the pcd results')
-    parser.add_argument('--byproduct_save', default = "demo_saved", type=str, help='Where to save the byproduct, including snap images, masks, and lookup_dict')
+    parser.add_argument('--pcd_path', default="demo.ply", type=str, help='path for 3d scans, could be .ply or .npy with shape (N, 6)')
+    parser.add_argument('--vocab', nargs='*' , help='list of class names of interests')
+    parser.add_argument('--detector', type=str, default="odise", help='choose between odise and yoloworld')
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     
-    v = viz.Visualizer()
-
-    # load all args
-    args = get_args()   
-
-    scene_id = os.path.basename(args.pcd_path).split(".")[0]
-    height, width = args.img_size[0], args.img_size[1] 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    snap_save_path = f"{args.byproduct_save}/snap/"
-    lookup_save_path = f"{args.byproduct_save}/Lookup_dict/"
-    result_save_path_2d = f"{args.byproduct_save}/result_vis_2d/"
-    result_save_path_3d = f"{args.byproduct_save}/result_vis_3d/"
-    result_mask_save_path = args.result_save
-    string_list = args.vocab.split(';')
-
-    CLASS_LABELS = [s.strip() for s in string_list]
-    VALID_CLASS_IDS = np.arange(1, len(CLASS_LABELS) + 1).tolist()
-
-
     print("start to load models>>>>>>>>>>>>>>>>>>>>>>>>")
     # mask proposal module
-    model = get_model(args.MPM_checkpoint)
-    model.eval()
-    model.to(device) 
-    odise_model = load_2d_model(args.vocab)
+    argparse = get_args()
+    pcd_path = argparse.pcd_path
+    detector = argparse.detector
+    additional_vocab = argparse.vocab
+    
+    vocab= get_label_and_ids("replica")[0]
+    if additional_vocab is not None:
+        vocab.extend(additional_vocab)
 
-    print(f"finish loading models; start to process {scene_id}>>>>>>>>>>>>>>>>>>>>>>>>")
 
-    # snap module
-    print("snap:")
-    pointcloud_file = args.pcd_path
-    if args.dataset in ["scannet"]:
-        adjust_camera = [5, 0.1, 0.3]
-        image_generation_mesh(pointcloud_file, height, width, scene_id, snap_save_path, adjust_camera=adjust_camera)
-        pcd, _ = read_plymesh(pointcloud_file)
-        xyz, rgb = pcd[:,:3], pcd[:,3:6]
-        scan_pc = torch.from_numpy(np.hstack([xyz, rgb]))
-    elif args.dataset in ["replica"]:
-        adjust_camera = [5, 0.1, 0.3]
-        image_generation_mesh(pointcloud_file, height, width, scene_id, snap_save_path, adjust_camera=adjust_camera)
-        pcd, _ = read_plymesh(pointcloud_file)
-        xyz, rgb = pcd[:,:3], pcd[:,6:9]
-        scan_pc = torch.from_numpy(np.hstack([xyz, rgb]))
-    elif args.dataset == "mattarport3d":
-        # load mattarport3d as pcd
-        pcd, _ = read_plymesh(pointcloud_file)
-        xyz, rgb = pcd[:,:3], pcd[:,8:11]
-        scan_pc = torch.from_numpy(np.hstack([xyz, rgb]))
-        adjust_camera = [2, 0.1, 0.3]  
-        image_generation_pcd(scan_pc, height, width, scene_id, snap_save_path, adjust_camera=adjust_camera)
-    elif args.dataset == "s3dis":
-        # load s3dis as pcd
-        pcd = np.load(pointcloud_file)
-        xyz, rgb = pcd[:,:3], pcd[:,3:6]
-        scan_pc = torch.from_numpy(np.hstack([xyz, rgb]))
-        adjust_camera = [10, 2, 0.6]
-        image_generation_pcd(scan_pc, height, width, scene_id, snap_save_path, adjust_camera=adjust_camera)
-    print("mask:")
-    # mask module
-    if args.dataset in ["scannet", "replica", "mattarport3d"]:
-        mesh = load_mesh(pointcloud_file)
-        data, _, _, features, _, inverse_map = prepare_data(mesh, device)
-        with torch.no_grad():
-            outputs = model(data, raw_coordinates=features)
-        binary_mask = map_output_to_pointcloud(mesh, outputs, inverse_map, confidence_threshold = 0.8)
-    elif args.dataset =="s3dis":
-        pcd = np.load(pointcloud_file)
-        xyz, rgb = pcd[:,:3], pcd[:,3:6]
-        scan_pc = torch.from_numpy(np.hstack([xyz, rgb]))
-        data, _, _, features, _, inverse_map = prepare_data_pcd(xyz, rgb, device)
-        with torch.no_grad():
-            outputs = model(data, raw_coordinates=features)
-        binary_mask = map_output_to_pointcloud(scan_pc, outputs, inverse_map, confidence_threshold = 0.8)
-    print("build lookup dictionaries:")
-    # build_lookup_dict
-    build_lookup_dict_one_scene(odise_model, scene_id, snap_save_path, lookup_save_path)
-    print("mask2pixel lookup:")
-    # mask2pixel lookup
-    mask2pixel_lookup, _ = mask_classfication(binary_mask, scan_pc, adjust_camera, scene_id, height, width, snap_save_path, lookup_save_path, result_mask_save_path, CLASS_LABELS, VALID_CLASS_IDS)
 
-    # save and visulizize the results
-    detection_results, detected_label_id = generate_detection_results(mask2pixel_lookup, binary_mask, CLASS_LABELS, VALID_CLASS_IDS)
-    # save results in image
-    save_results_2d(scan_pc, height, width, scene_id, result_save_path_2d, adjust_camera, detection_results)
-    save_visulization_3d(scan_pc.cpu().numpy(), args.vocab, binary_mask, detection_results[0], detected_label_id, scene_id, result_save_path_3d, save_ply = False)
+    name_of_scene = pcd_path.split("/")[-1].split(".")[0]
+    if pcd_path.endswith(".ply"):
+        mesh = load_mesh(pcd_path)
+        pcd_rgb = np.hstack([np.asarray(mesh.vertices), np.asarray(mesh.vertex_colors) * 255.])
+    elif pcd_path.endswith(".npy"):
+        pcd_rgb = np.load(pcd_path)[:, :6]
+    else:
+        raise ValueError("Unsupported file format")
+
+    # load model and generate masks
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = get_model("third_party/scannet200_val.ckpt").to(device).eval()
+    data, features, _, inverse_map = prepare_data(pcd_rgb, device)
+    with torch.no_grad():
+        mask_list = map_output_to_pointcloud(model(data, raw_coordinates=features), inverse_map, 0.5)
+
+    image_size = [800, 800]
+    adjust_camera = [2, 0.1, 1.0] # [lift_cam, zoomout, remove_lip]
+    snap = Snap(image_size, adjust_camera, "output/snap_demo")
+    lookup = Lookup(image_size, adjust_camera[2], "output/snap_demo", text_input=vocab, results_folder="output/results_demo")
+
+    if detector =="odise":
+        lookup.call_ODISE()
+    elif detector == "yoloworld":
+        lookup.call_YOLOWORLD()
+
+    # snap and lookup
+    snap.scene_image_rendering(torch.tensor(pcd_rgb).float(), name_of_scene, mode=["global", "wide", "corner" ])
+    mask_classfication, score = lookup.lookup_pipelie(pcd_rgb, mask_list, name_of_scene, threshold = 0.5)
+
+    results_txt = [vocab[i] for i in mask_classfication if i != -1]
+    mask_final = mask_list[:, [i for i in range(len(mask_classfication)) if mask_classfication[i] != -1]]
+
+    snap.scene_image_rendering(torch.tensor(pcd_rgb).float(), f"{name_of_scene}_vis", mode=["global"], mask=[mask_final, results_txt])
+
+    print("\n" + "="*50)
+    print(f"*** Finished processing the scene! Results are saved in 'output/snap_demo/{name_of_scene}_vis/image/' folder. ***")
+    print("="*50 + "\n")
