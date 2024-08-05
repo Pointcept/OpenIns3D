@@ -7,257 +7,312 @@ Author: Zhening Huang (zh340@cam.ac.uk)
 import torch
 import numpy as np
 from tqdm import tqdm
-import json
-import matplotlib.pyplot as plt
 import os
-import time
-from torch_scatter import scatter_max
+from utils import read_plymesh
+from glob import glob
+import torch.nn.functional as F
+from build_lookup_yoloworld import YOLOWORLD
+from build_lookup_odise import ODISE
+from utils import *
+from snap import Snap
 
 
-def generate_neighbors(thickness):
-    
-    size = (thickness - 1) * 2 + 1
-    x_coords = torch.arange(0 - thickness + 1, 0 + thickness).unsqueeze(1).repeat(1, size)
-    y_coords = torch.arange(0 - thickness + 1, 0 + thickness).repeat(size, 1)
-    x_coords = x_coords.view(-1)
-    y_coords = y_coords.view(-1)
+class Lookup:
 
-    neighbor_indices = torch.column_stack((x_coords, y_coords)).cuda()
+    def __init__(self, image_size, remove_lip, snap_folder, text_input, results_folder = None):
+        self.image_height, self.image_width = image_size
+        self.remove_lip = remove_lip
+        self.snap_folder = snap_folder
+        self.results_folder = results_folder
+        self.device =  "cuda" if torch.cuda.is_available() else "cpu"
+        self.text_input = text_input
 
-    return neighbor_indices
+    def call_ODISE(self):
+        if hasattr(self, 'YOLOWORLD'):
+            delattr(self, 'YOLOWORLD')
+        self.ODISE = ODISE(self.snap_folder, self.results_folder, self.text_input)
 
-def single_mask_projection(obj_pcd_rgb, depth_intrinsic, pose_matrix, mask_idx_input, width, height, point_size):
-    point_cloud_mask = obj_pcd_rgb
-    fx = depth_intrinsic[0, 0]
-    fy = depth_intrinsic[1, 1]
-    cx = depth_intrinsic[0, 2]
-    cy = depth_intrinsic[1, 2]
-    bx = depth_intrinsic[0, 3]
-    by = depth_intrinsic[1, 3]
+    def call_YOLOWORLD(self):
+        if hasattr(self, 'ODISE'):
+            delattr(self, 'ODISE')
+        self.YOLOWORLD = YOLOWORLD(self.snap_folder, self.results_folder, self.text_input)
 
-    points = torch.ones((point_cloud_mask.shape[0], 4), device = 'cuda')
-
-    points[:, :3] = point_cloud_mask[:, :3]
-
-    inv_pose = np.linalg.inv(np.transpose(pose_matrix))
-    inv_pose_torch = torch.from_numpy(inv_pose).float().cuda()
-    points_new = torch.matmul(points, inv_pose_torch)
-
-    X = points_new[:, 0]
-    Y = points_new[:, 1]
-    Z = points_new[:, 2]
-    
-    non_zero_mask = Z != 0
-
-    image_x = (X[non_zero_mask] - bx) * fx / Z[non_zero_mask] + cx
-    image_y = (Y[non_zero_mask] - by) * fy / Z[non_zero_mask] + cy
-    
-    x_idx = torch.round(image_x).int()
-    y_idx = torch.round(image_y).int()
-
-    index_xy = torch.vstack((x_idx,y_idx)).T
-    depth = Z[non_zero_mask]
-    
-    point_size = 2
-    index_xy_expand = index_xy[:, None, :] + generate_neighbors(point_size)
-
-    neighborhood_size = ((point_size - 1) * 2 + 1)**2
-    
-    index_xy_expand[index_xy_expand >= width] = width-1
-    index_xy_expand[index_xy_expand < 0] = 0
-    index_xy = index_xy_expand.reshape(-1, 2)
-    
-    depth = depth.unsqueeze(1).expand(depth.shape[0], neighborhood_size).reshape(-1)
-
-
-    unique_idx, indices = torch.unique(index_xy, dim=0, return_inverse=True)
-    
-    out, _ = scatter_max(depth, indices)
-
-    mask_map = torch.zeros((width, height), device = 'cuda')
-    depth_map = torch.ones((width, height), device = 'cuda') * 999
-
-    index = unique_idx
-    mask_map[index[:, 0], index[:, 1]] = mask_idx_input
-    depth_map[index[:, 0], index[:, 1]] = out.cuda()
-
-    return mask_map, depth_map
-
-def pcd2img_point_occlusion_aware(all_point, mask_bin, pose_matrix, depth_intrinsic, width, height, point_size = 1, name = None):
-    
-    "mask rasterization for mask2pixel mapping geneartion"
-
-    mask_map_total = []
-    depth_map_total = []
-
-    point_size = 1
-    
-    for mask_idx in range(mask_bin.shape[1]):
-        indices = torch.nonzero(mask_bin[:, mask_idx])
-        if indices.shape[0]<=2:
-            continue
-        obj_pcd_rgb = all_point[indices.squeeze()]
-        mask_map, depth_map = single_mask_projection(obj_pcd_rgb, depth_intrinsic, pose_matrix,mask_idx, width, height, point_size)
-        mask_map_total.append(mask_map.unsqueeze(2))
-        depth_map_total.append(depth_map.unsqueeze(2))
-
-    mask_map_total_stack = torch.concatenate(mask_map_total, axis =2 )
-    depth_map_total_stack = torch.concatenate(depth_map_total, axis =2)
-
-    depth_map_max_idx = torch.argmin(depth_map_total_stack, axis=-1)
-
-    condensed_depth_map = mask_map_total_stack[torch.arange(mask_map_total_stack.shape[0])[:, None, None], torch.arange(mask_map_total_stack.shape[1])[None, :, None], depth_map_max_idx[:, :, None]]
-    final_depth_map = condensed_depth_map.int().transpose(1,0).squeeze()
-
-    if name:
-        plot_mask = final_depth_map.cpu().numpy()
-        num_unique_values = len(np.unique(plot_mask))
-        cmap = plt.cm.get_cmap('tab10', num_unique_values)
-        plt.imshow(plot_mask, cmap=cmap, interpolation='none')
-        plt.savefig(f'{name}.png')
-
-    return final_depth_map
-
-def calculate_iou_matrix(mask_tensor1, mask_tensor2):
-    
-    mask_tensor1 = mask_tensor1.cuda().reshape(-1,1)
-    mask_tensor2 = mask_tensor2.cuda().reshape(-1,1)
-    unique_groups_1 = torch.unique(mask_tensor1)
-    unique_groups_1 = unique_groups_1[unique_groups_1!=0]
-    original_mask_1 = (mask_tensor1 == unique_groups_1.view(1, -1)).float()
-    original_mask_1_t = original_mask_1.t()
-    unique_groups_2 = torch.unique(mask_tensor2)
-    # unique_groups_2 = unique_groups_2[unique_groups_2!=-1]
-    original_mask_2 = (mask_tensor2 == unique_groups_2.view(1, -1)).float()
-    
-    intersection = torch.mm(original_mask_1_t, original_mask_2)
-    union = original_mask_1_t.sum(dim=1, keepdim=True) + original_mask_2.sum(dim=0, keepdim=True) - intersection
-    iou_matrix = intersection / union
-    return iou_matrix.cpu().numpy(), unique_groups_1, unique_groups_2
-
-def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
-    assigned_masks = {}
-    score_masks = {}
-    iou_matrix, idx_pred, idx_project = calculate_iou_matrix(pred_mask, project_mask)
-    iou_matrix[iou_matrix<threshold] = 0
-    if iou_matrix.shape[0]==0:
-        return assigned_masks, score_masks
-    max_indices = np.argmax(iou_matrix, axis=0)
-    max_iou = np.max(iou_matrix, axis=0)
-    for count, best_match_iou in enumerate(max_iou):
-        targeting_proj_mask = int(idx_project[count])
-        if best_match_iou !=0:
-            assigned_masks[targeting_proj_mask] =  int(idx_pred[max_indices[count]])  
-            score_masks[targeting_proj_mask] = best_match_iou
-    return assigned_masks, score_masks
-
-def normalize_scores(predict_score, predict_list):
-    total_score = sum(predict_score)
-    normalized_scores = [score / total_score for score in predict_score]
-    combined_normalized_data = list(zip(normalized_scores, predict_list))
-    grouped_data = {}
-    for normalized_score, predict in combined_normalized_data:
-        if predict not in grouped_data:
-            grouped_data[predict] = 0
-        grouped_data[predict] += normalized_score
-    predict_ranks = sorted(grouped_data, key=grouped_data.get, reverse=True)
-    sorted_data = [grouped_data[rank]  for rank in predict_ranks]
-    return predict_ranks, sorted_data
-
-def mask_classfication(mask_bin, all_point, adjust_camera, scene_id, width, height, SNAP_location, Lookup_location, final_results,  CLASS_LABELS, VALID_CLASS_IDS ):
-    
-    lift_cam, zoomout, remove_lip = adjust_camera
-    
-    # get rid of lip
-    z_max = all_point[:, 2].max()
-    idx_remained = all_point[:, 2] <= (z_max - remove_lip)
-
-    mask_bin_original = mask_bin.clone()
-
-    mask_bin = mask_bin[idx_remained, :]
-    all_point = all_point[idx_remained, :]
-    # number of mask
-    num_mask = mask_bin.shape[1]
-
-    # create a dict to store mask from multiple images
-    perdiction_collections = {}
-    score_colletions = {}
-    for mask_idx in range(0, num_mask):
-        perdiction_collections[int(mask_idx)] = []
-        score_colletions[int(mask_idx)] = []
-
-    for angle in tqdm(range(16)):
-        camera_to_world = f"{SNAP_location}/{scene_id}/pose/pose_matrix_calibrated_angle_{angle}.npy"
-        intrinsic_matrix = f"{SNAP_location}/{scene_id}/intrinsic/intrinsic_calibrated_angle_{angle}.npy"
+    def mask2pixel_map(self, scan_pc, mask_binary, scene_id, save_image=False, bbox=False):    
         
-        intrinsic_matrix = np.load(intrinsic_matrix)
-        pose_matrix = np.load(camera_to_world)    
+        """
+        This is the code to calculate the pixel locations for all 3d masks.
+        input: scan_pc: torch.tensor, [N,6]
+                mask_binary: torch.tensor, [N, num_masks]
+                scene_id: str, the scene id
+                save_image: bool, whether to save the image of mask2pixel map
+                bbox: bool, whether to return the bbox or mask2pixel map
+        output:
+            if bbox is False: [num_imgs, width, height], where -1 is the background, and other values are the mask index
+            if bbox is True: [num_imgs, num_mask, 4], where the 4 is [x_min, y_min, x_max, y_max]
+        """
+
+        # prepare the pcd by removing the lip as what we did for the snap module.
+        z_max = scan_pc[:, 2].max()
+        idx_remained = scan_pc[:, 2] <= (z_max - self.remove_lip)
+        mask_binary = mask_binary[idx_remained, :]
+        scan_pc = scan_pc[idx_remained, :]
+        scan_pc = torch.tensor(scan_pc, dtype=torch.float32, device=self.device)
+        num_imgs = len(glob(f"{self.snap_folder}/{scene_id}/pose/*.npy"))
+        self.num_imgs = num_imgs
+
+
+        if save_image:
+            if not os.path.exists(f"{self.results_folder}/{scene_id}"):os.makedirs(f"{self.results_folder}/{scene_id}/")
+        # start to calculate the mask2pixel map
+        mask2pxiel_map_list = torch.zeros((self.image_height, self.image_width, num_imgs), device=self.device)
+        self.num_mask = mask_binary.shape[1]
+
+        for angle in range(num_imgs):
+            # load the camera pose and intrinsic matrix
+            camera_to_world = np.load(f"{self.snap_folder}/{scene_id}/pose/pose_matrix_calibrated_angle_{angle}.npy")
+            intrinsic_matrix = np.load(f"{self.snap_folder}/{scene_id}/intrinsic/intrinsic_calibrated_angle_{angle}.npy")
+
+            if save_image:
+                save_mask2pixel_map = f"{self.results_folder}/{scene_id}/mask2pixel_map_{angle}.png"  # Optional: Path for saving the image
+            else:
+                save_mask2pixel_map = None
+
+            # calculate the mask2pixel map
+            mask2pxiel_map, _ = mask_rasterization(
+                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                self.image_width, self.image_height, 2, 
+                name=save_mask2pixel_map, display_rate_calculation=False
+            )
+            mask2pxiel_map_list[:,:,angle] = mask2pxiel_map
+
+        if bbox:
+            return self.bbox_from_mask2pixel(mask2pxiel_map_list)
+        else:
+            return mask2pxiel_map_list
+
+    def display_report(self, scan_pc, mask_binary, camera_to_world, intrinsic_matrix):
+        """
+        This is the code to calculate the display rate for each mask.
+        input: scan_pc: torch.tensor, [N,6]
+                mask_binary: torch.tensor, [N, num_masks]
+                camera_to_world: np.array, [4,4]
+                intrinsic_matrix: np.array, [4,4]
+        output: display_rate: np.array, [num_masks, 1]
+        """
+        return mask_rasterization(
+                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                self.image_width, self.image_height, point_size=1, # Important: point_size has to be 1 for occlusion report.
+                name=None, display_rate_calculation=True
+            )[1]
+
+    def label_location_visulization(self, mask2pxiel_map_list):
+        """
+        This funcation is used to compute the label labels in 2D image for visualization.
+        input: mask2pxiel_map_list: torch.tensor, [width, height, num_imgs]
+        output: [num_imgs, num_mask, 2]
+        """
+        final_box = self.bbox_from_mask2pixel(mask2pxiel_map_list)
+        center_bbox = (final_box[:, :, [0, 1]] + final_box[:, :, [2, 3]]) / 2
+        return center_bbox
+
+    def bbox_from_mask2pixel(self, mask2pxiel_map_list):
+
+        """
+        This function is used to convert pixel location to bbox.
+        input: mask2pxiel_map_list: torch.tensor, [width, height, num_imgs]
+        output: [num_mask, num_imgs, 4], where 4 is [x_min, y_min, x_max, y_max]
+        """
+        max_mask_idx = self.num_mask -1
+
+        # set the background to be max_mask_idx + 1 
+        mask2pxiel_map_list[mask2pxiel_map_list == -1] = max_mask_idx + 1
+        num_classes = int(max_mask_idx) + 2
+        number_image = mask2pxiel_map_list.shape[2]
+        final_bbox = torch.zeros((int(number_image), int(max_mask_idx)+1, 4), device=self.device)
+        for i in range(number_image):
+            mask2pxiel_map_single = mask2pxiel_map_list[:, :, i].unsqueeze(-1)
+            one_hot_encoded = F.one_hot(mask2pxiel_map_single.long(), num_classes=num_classes)
+            binary_mask = one_hot_encoded.permute(0, 1, 3, 2).float()
+            binary_mask = binary_mask[:, :, :-1, :].squeeze(-1)
+            final_bbox[i] = to_bounding_boxes(binary_mask.bool())
+        return final_bbox
+
+
     
-        mask2pxiel_map = pcd2img_point_occlusion_aware(all_point, mask_bin, pose_matrix, intrinsic_matrix, width, height, 2) # vectorized this operation
-        
-        load_2d_pred_map = f"{Lookup_location}/{scene_id}/map/image_rendered_angle_{angle}.pt"
-        load_2d_pred_label = f"{Lookup_location}/{scene_id}/label/image_rendered_angle_{angle}"
-        pred_map = torch.load(load_2d_pred_map).to_dense().cpu()
-        with open(load_2d_pred_label, "r") as read_file:
-            label_2d = json.load(read_file)
+    def asslign_label_with_pixel(self, project_mask_list, pred_mask_list, pred_label_list):
+        """
+        This function is used to asslign the label with pixel location.
+        input: mask2pxiel_map_list: torch.tensor, [num_imgs, width, height]
+               pred_label: torch.tensor, ([width, height, num_imgs], [labels_dict])
+        output: predict: [num_mask]
+        """
 
-        mask_align_between_2d_3d, score_2d_3d = assign_pred_mask_to_gt(pred_map, mask2pxiel_map, 0.30)
+        num_mask = self.num_mask # total number of mask in 3d scene
+        num_image = self.num_imgs # total number of images
 
-        for mask_3d_idx, pred_2d in mask_align_between_2d_3d.items():
-            perdiction_collections[int(mask_3d_idx)].append(label_2d[pred_2d-1]["category_id"])
-            score_colletions[int(mask_3d_idx)].append(score_2d_3d[mask_3d_idx])
+        # create a dict to store mask from multiple images
+        perdiction_collections = {} # this save all pred masks, of which iou with the project mask is greater than threshold.
+        score_colletions = {} # this save the iou score of the pred masks that has been assigned to the project mask
 
-    mask2pixel_lookup = {}
-    mask2pixel_lookup_score = {}
-    for mask_id, prediction_list in perdiction_collections.items():
-        if len(prediction_list) == 0:
-            mask2pixel_lookup[mask_id] = None
-            mask2pixel_lookup_score[mask_id] = 0
-            continue
-        predict_score = score_colletions[mask_id]
-        prediction_ranks, score_ranks = normalize_scores(predict_score, prediction_list)
-        prediction = prediction_ranks[0]
-        normalized_iou = score_ranks[0]
-        if normalized_iou < 0.5:
-            mask2pixel_lookup[mask_id] = None
-            mask2pixel_lookup_score[mask_id] = 0
-            continue
-        mask2pixel_lookup_score[mask_id] = normalized_iou
-        mask2pixel_lookup[mask_id] = prediction 
+        # set up the dict for each mask in 3d
+        for mask_idx in range(num_mask):
+            perdiction_collections[int(mask_idx)] = []
+            score_colletions[int(mask_idx)] = []
 
-    save_path = f"{final_results}/{scene_id}"
-    output_dir= f"{save_path}/pred_mask"
+        for i in tqdm(range(num_image)):
+            project_mask = project_mask_list[:, :, i]  # where -1 is the background
+            pred_mask = pred_mask_list[i, :, :] # where 0 is the background
+            labels_for_pred = pred_label_list[i]
+            pred_mask[project_mask==-1] = 0 # only consider the pixel that has a projection
 
-    final_mask_idx = []
-    for mask_idx in mask2pixel_lookup.keys():
-        if mask2pixel_lookup[mask_idx] != None:
-            final_mask_idx.append(int(mask_idx))
-            mask2pixel_lookup[mask_idx] = VALID_CLASS_IDS[(mask2pixel_lookup[int(mask_idx)])]
+            assigned_masks, score_masks = assign_pred_mask_to_gt(pred_mask, project_mask, 0.3)
+            for mask_3d_idx, pred_2d in assigned_masks.items():
+                perdiction_collections[int(mask_3d_idx)].append(int(labels_for_pred[pred_2d])) 
+                score_colletions[int(mask_3d_idx)].append(score_masks[mask_3d_idx])
+        return perdiction_collections, score_colletions
 
-    if not os.path.exists(output_dir):os.makedirs(output_dir)
-    labels_list = []
-    confidences_list = []
-    masks_binary_list = []
-    
-    for mask_idx in range(0, num_mask):
-        labels_list.append(mask2pixel_lookup[mask_idx])
-        confidences_list.append(mask2pixel_lookup_score[mask_idx])
-        masks_binary_list.append(mask_bin_original[:, mask_idx])
+    def multiview_aggregation(self, perdiction_collections, score_colletions, threshold = 0.5):
+        final_mask_classfication = {} # this is the final mask classification for each mask in 3d after multi view aggregation
+        mask2pixel_lookup_score = {} # this give the score the the prediction
 
-    with open(os.path.join(save_path, f'{scene_id}.txt'), 'w') as f:
-        for i, (l, c, m) in enumerate(zip(labels_list, confidences_list, masks_binary_list)):
-            if  l is None:
+        for mask_id, prediction_list in perdiction_collections.items():
+            if len(prediction_list) == 0:
+                final_mask_classfication[mask_id] = None
+                mask2pixel_lookup_score[mask_id] = None
                 continue
-            mask_file = f'pred_mask/{str(i).zfill(3)}.txt'
-            f.write(f'{mask_file} {l} {c}\n')
-            np.savetxt(os.path.join(save_path, mask_file), m.numpy(), fmt='%d')
 
-    return mask2pixel_lookup, mask2pixel_lookup_score
+            predict_score = score_colletions[mask_id]
+            top_1_predict, top_1_score = normalize_scores(predict_score, prediction_list)
+
+            if top_1_score < threshold:
+                final_mask_classfication[mask_id] = None
+                mask2pixel_lookup_score[mask_id] = None
+                continue
+
+            mask2pixel_lookup_score[mask_id] = top_1_score
+            final_mask_classfication[mask_id] = top_1_predict 
+
+        mask_results = [i if i is not None else -1 for i in final_mask_classfication.values()]
+        mask_score = [i if i is not None else -1 for i in mask2pixel_lookup_score.values()]
+
+        return mask_results, mask_score
+
+    def assign_label_with_bbox(self, project_bbox, pred_bbox, labels, threshold):
+        """
+        This function is used to asslign the label with pixel location.
+        
+        input: mask2pxiel_map_list: torch.tensor, [num_imgs, num_masks, 4]
+                pred_label: torch.tensor, ([num_imgs, num_masks, 4], [labels_dict])
+        output: mask_results: list, [num_masks], the final mask results
+                mask_score
+        
+        """
+        # batch calculation of IOU between predicted and project bounding boxes
+
+        project_bbox = project_bbox.unsqueeze(2)  
+        pred_bbox = pred_bbox.unsqueeze(1)  
+        x1 = torch.maximum(project_bbox[..., 0], pred_bbox[..., 0])
+        y1 = torch.maximum(project_bbox[..., 1], pred_bbox[..., 1])
+        x2 = torch.minimum(project_bbox[..., 2], pred_bbox[..., 2])
+        y2 = torch.minimum(project_bbox[..., 3], pred_bbox[..., 3])
+        intersection_area = torch.maximum(torch.tensor(0.0), x2 - x1) * torch.maximum(torch.tensor(0.0), y2 - y1)
+
+        projection_area = (project_bbox[..., 2] - project_bbox[..., 0]) * (project_bbox[..., 3] - project_bbox[..., 1])
+        pred_bbox_area = (pred_bbox[..., 2] - pred_bbox[..., 0]) * (pred_bbox[..., 3] - pred_bbox[..., 1])
+        union_area = projection_area + pred_bbox_area - intersection_area
+        iou_array = intersection_area / (union_area + 1e-6)
+
+        # Find the index of the bbox with the highest IoU for each projection
+        best_match_idx = torch.argmax(iou_array, dim=2)  
+        best_iou_values = torch.max(iou_array, dim=2).values
+
+        # Get the number of images and masks
+        num_image = best_match_idx.shape[0]
+        num_mask = best_match_idx.shape[1]
+    
+        perdiction_collections = {} # this save all pred masks, of which iou with the project mask is greater than threshold.
+        score_colletions = {} # this save the iou score of the pred masks that has been assigned to the project mask
+
+        # set up the dict for each mask in 3d
+        for mask_idx in range(num_mask):
+            perdiction_collections[int(mask_idx)] = []
+            score_colletions[int(mask_idx)] = []
+
+        for i in range(num_image):
+            assigned_masks, score_masks = best_match_idx[i], best_iou_values[i]
+            this_label = labels[i]
+            for mask_i, pred_2d in enumerate(assigned_masks):
+                if score_masks[mask_i] >= threshold: # here the where the threshold is set
+                    perdiction_collections[mask_i].append(int(this_label[pred_2d]))
+                    score_colletions[mask_i].append(float(score_masks[mask_i]))
+
+        return perdiction_collections, score_colletions
+
+    def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.3):
+
+        if hasattr(self, 'YOLOWORLD'):
+            bbox = True
+            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=False, bbox=bbox)
+            mask, label = self.YOLOWORLD.build_lookup_dict(scene_id, save = True)
+            perdiction_collections, score_colletions = self.assign_label_with_bbox(mask2pxiel_map_list, mask, label, threshold) 
+            mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
+        elif hasattr(self, 'ODISE'):
+            bbox = False
+            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox)
+            mask, label = self.ODISE.build_lookup_dict(scene_id, save = True)
+            perdiction_collections, score_colletions = self.asslign_label_with_pixel(mask2pxiel_map_list, mask, label)
+            mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
+        else:
+            raise ValueError("Please call either ODISE or YOLOWORLD first")
+        return mask, score
+
 
 if __name__ == "__main__":
-    all_point = torch.load("all_points.pt").cpu()
-    binary_mask = torch.load("gt_mask.pt").cpu()
-    SNAP_location = "export/Snap"
-    Lookup_location = "Lookup_dict"
-    scene_id = "scene0011_00"
-    mask_classfication(binary_mask, all_point, scene_id, 1000, 1000, SNAP_location, Lookup_location, "export/final_result")
+
+    # Define image dimensions
+    image_width = 800
+    image_height = 800
+
+    remove_lip = 0.5  # Distance to remove the ceiling or upper part of the scene for better visibility, if needed
+    image_size = [image_width, image_height]
+
+
+    # Path to the mesh file
+    mesh_path = "/home/zelda/zh340/myzone/OpenIns3D_final_github/openins3d_data/replica/scenes/office2.ply"
+
+    # Load pcd from mesh
+    pcd_rgb, _ = read_plymesh(mesh_path)
+    pcd_rgb = np.hstack((pcd_rgb[:, :3], pcd_rgb[:, 6:9]))
+
+    # Load the mask data and generate labels
+    mask_path = "/home/zelda/zh340/myzone/OpenIns3D_final_github/openins3d_data/replica/masks/ground_truth/office2.pt"
+    mask_list = torch.load(mask_path)[0]
+
+    text_prompts_replica, VALID_CLASS_IDS = get_label_and_ids("Replica")
+    snap_folder = "snap_outcomes"
+    save_folder = "lookup_outcomes"
+
+    lookup_module = Lookup(image_size, remove_lip, snap_folder, text_input=text_prompts_replica, results_folder = save_folder)
+
+    # test 1: compute the mask2pixel map
+    lookup_module.call_YOLOWORLD()
+    masks, score = lookup_module.lookup_pipelie(pcd_rgb, mask_list, "office2", threshold = 0.3)
+    all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
+    label_results = [text_prompts_replica[i] for i in masks if i != -1]
+    mask_final = mask_list[:, all_valid_idx]   
+    detection_results_yolo = [mask_final, label_results]
+
+    lookup_module.call_ODISE()
+    masks, score = lookup_module.lookup_pipelie(pcd_rgb, mask_list, "office2", threshold = 0.3)
+    all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
+    label_results = [text_prompts_replica[i] for i in masks if i != -1]
+    mask_final = mask_list[:, all_valid_idx]
+    detection_results_odise = [mask_final, label_results]
+
+    # # plot the results
+    adjust_camera = [5, 0.1, 0.5]
+    snap_module = Snap(image_size, adjust_camera, save_folder=save_folder)
+    snap_module.scene_image_rendering(mesh_path, "odise_results_vis_yolo", mode=["global"], mask=detection_results_yolo)
+    snap_module.scene_image_rendering(mesh_path, "odise_results_vis_odise", mode=["global"], mask=detection_results_odise)
+
+

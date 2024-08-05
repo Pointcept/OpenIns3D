@@ -1,8 +1,3 @@
-output_result*
-saved*
-checkpoints
-OpenIns3D/openins3d/mask/MinkowskiEngine
-ODISE
 __pycache__
 **/build/
 **/*.egg-info/
@@ -12,10 +7,10 @@ __pycache__
 **/*.out
 /__pycache__/ 
 __pycache__
-scannet-preprocess/
-demo_results
-demo_scene
-demo_saved
-input_data
-scannet_results
-saved
+data/*
+output/*
+YOLO-World/*
+third_party/ODISE
+third_party/pretrained
+third_party/scannet200_val.ckpt
+scripts/download-scannet.py
