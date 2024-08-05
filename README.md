@@ -89,20 +89,21 @@ We have detailed the level of installation needed for different purposes.
 
 ---
 
-# Reproducing Results
+# 🛠️ Reproducing Results
 
-### Replica
+### 🗂️ Replica
 
-**Data Preparation**: Execute the following command to set up the Replica dataset, including scene `.ply` files, predicted masks, and ground truth:
+**🔧 Data Preparation**: 
+1. Execute the following command to set up the Replica dataset, including scene `.ply` files, predicted masks, and ground truth:
 ```sh
 sh scripts/prepare_replica.sh
 ```
 
-**Instance Segmentation**:
+**📊 Open Vocabulary Instance Segmentation**:
 ```sh
 python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
 ```
-
+**📈 Results Log**: 
 | Task                        |  AP  | AP50 | AP25 | Log |
 |-----------------------------|:----:|:----:|:----:|:----:|
 | Replica OVIS (in paper)      | 13.6 | 18.0 | 19.7 |      |
@@ -110,9 +111,9 @@ python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
 
 ---
 
-### ScanNet
+### 🗂️ ScanNet
 
-**Data Preparation**: 
+**🔧 Data Preparation**: 
 1. Make sure you have completed the form on [ScanNet](http://www.scan-net.org/) to obtain access.
 2. Place the `download-scannet.py` script into the `scripts` directory.
 3. Run the following command to download all `_vh_clean_2.ply` files for validation sets, as well as instance ground truth, GT-masks, and detected masks:
@@ -121,27 +122,27 @@ python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
 sh scripts/prepare_scannet.sh
 ```
 
-**Object Recognition**: 
+**📊 Open Vocabulary Object Recognition**: 
 ```sh
 python openins3d/main.py --dataset scannet --task OVOR --detector odise
 ```
 
+**📈 Results Log**: 
 | Task                        | Top-1 Accuracy | Log |
 |-----------------------------|:--------------:|:----:|
 | ScanNet_OVOR (in paper)      |     60.4       |      |
 | ScanNet_OVOR (this Code)     |     64.2       | [log](assets/logs/log_scannet_classfication.txt)  |
 
-
-**Object Detection**:
+**📊 Open Vocabulary Object Detection**:
 ```sh
 python openins3d/main.py --dataset scannet --task OVOD --detector odise
 ```
 
-**Instance Segmentation**:
+**📊 Open Vocabulary Instance Segmentation**:
 ```sh
 python openins3d/main.py --dataset scannet --task OVIS --detector odise
 ```
-
+**📈 Results Log**: 
 | Task                        |  AP  | AP50 | AP25 | Log |
 |-----------------------------|:----:|:----:|:----:|:----:|
 | ScanNet_OVOD (in paper)      | 17.8 | 28.3 | 36.0 |      |
@@ -149,21 +150,22 @@ python openins3d/main.py --dataset scannet --task OVIS --detector odise
 | ScanNet_OVIS (in paper)      | 19.9 | 28.7 | 38.9 |      |
 | ScanNet_OVIS (this Code)     | 23.3 | 34.6 | 42.6 | [log](assets/logs/log_scannet_ovis.txt)  |
 
-
 ---
 
-### S3DIS
+### 🗂️ S3DIS
 
-**Data Preparation**: Make sure you have completed the form on [S3DIS](https://redivis.com/datasets/9q3m-9w5pa1a2h/files) to obtain access. Then, run the following command to acquire scene `.ply` files, predicted masks, and ground truth:
+**🔧 Data Preparation**: 
+1. Make sure you have completed the form on [S3DIS](https://redivis.com/datasets/9q3m-9w5pa1a2h/files) to obtain access. 
+2. Then, run the following command to acquire scene `.ply` files, predicted masks, and ground truth:
 ```sh
 sh scripts/prepare_s3dis.sh
 ```
 
-**Instance Segmentation**:
+**📊 Open Vocabulary Instance Segmentation**:
 ```sh
 python openins3d/main.py --dataset s3dis --task OVIS --detector odise
 ```
-
+**📈 Results Log**: 
 | Task                        |  AP  | AP50 | AP25 | Log |
 |-----------------------------|:----:|:----:|:----:|:----:|
 | S3DIS OVIS (in paper)        | 21.1 | 28.3 | 29.5 |      |
@@ -171,19 +173,20 @@ python openins3d/main.py --dataset s3dis --task OVIS --detector odise
 
 ---
 
-### STPLS3D
+### 🗂️ STPLS3D
 
-**Data Preparation**: Make sure you have completed the form [STPLS3D](https://www.stpls3d.com/data) to gain access. Then, run the following command to obtain scene `.ply` files, predicted masks, and ground truth:
+**🔧 Data Preparation**: 
+1. Make sure you have completed the form [STPLS3D](https://www.stpls3d.com/data) to gain access. 
+2. Then, run the following command to obtain scene `.ply` files, predicted masks, and ground truth:
 ```sh
 sh scripts/prepare_stpls3d.sh
 ```
 
-
-**Instance Segmentation**:
+**📊 Open Vocabulary Instance Segmentation**:
 ```sh
 python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 ```
-
+**📈 Results Log**: 
 | Task                        |   AP   | AP50  | AP25  | Log |
 |-----------------------------|:------:|:-----:|:-----:|:----:|
 | STPLS3D OVIS (in paper)      | 11.4  | 14.2 | 17.2 |      |
@@ -192,14 +195,14 @@ python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 ---
 
 
-# Zero-Shot Scene Understanding
+# 🎯 Zero-Shot Inference
 
-Note: Make sure you have installed the mask module according to installation, as it is not required for reproduing results.
+**ℹ️ Note**: Ensure you have installed the mask module according to the installation guide, as it is not required for reproducing results.
 
 To perform zero-shot scene understanding:
-1. Download the `scannet200_val.ckpt` checkpoint from [this link](https://drive.google.com/file/d/1emtZ9xCiCuXtkcGO3iIzIRzcmZAFfI_B/view) and place it in the `third_party/` directory.
+1. 📥 **Download** the `scannet200_val.ckpt` checkpoint from [this link](https://drive.google.com/file/d/1emtZ9xCiCuXtkcGO3iIzIRzcmZAFfI_B/view) and place it in the `third_party/` directory.
 
-2. To run the model, execute `python zero_shot.py` and specify:
+2. **To run the model**, execute `python zero_shot.py` and specify:
    - `pcd_path`: The path to the colored point cloud file.
    - `vocab`: A list of vocabulary terms to search for.
 
@@ -209,29 +212,29 @@ You can also use the following script to automatically set up the `scannet200_va
 sh scripts/prepare_zero_shot.sh
 ```
 
-### Running a Zero-Shot Inference
+
+### 🚀 Running a Zero-Shot Inference
+
 To perform zero-shot inference using the sample dataset (default with Replica vocabulary), run:
 
 ```bash
 python zero_shot.py --pcd_path data/demo_scenes/demo_scene_1.ply
 ```
-Results are saved under `output/snap_demo/demo_scene_1_vis/image`.
+📂 Results are saved under `output/snap_demo/demo_scene_1_vis/image`.
 
-
-To use different 2D detector [ODISE works better on pcd rendered images]:
+To use a different 2D detector (🔍 **ODISE works better on pcd rendered images**):
 
 ```bash
 python zero_shot.py --pcd_path data/demo_scenes/demo_scene_2.ply --detector yoloworld
 ```
 
-If you want to specify your own vocabulary list, add it in --vocab as following
+📝 If you want to specify your own vocabulary list, add it with the `--vocab` flag as follows:
 
 ```bash
 python zero_shot.py \
 --pcd_path 'data/demo_scenes/demo_scene_4.ply' \
 --vocab "drawers" "lower table"
 ```
----
 
 
 # Citation
