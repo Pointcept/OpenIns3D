@@ -107,7 +107,7 @@ python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
 | Task                        |  AP  | AP50 | AP25 | Log |
 |-----------------------------|:----:|:----:|:----:|:----:|
 | Replica OVIS (in paper)      | 13.6 | 18.0 | 19.7 |      |
-| Replica OVIS (this Code)     | 15.4 | 20.9 | 27.2 | [log](assets/logs/log_replica_ovis.txt)  |
+| Replica OVIS (this Code)     | 15.4 | 19.5 | 25.2 | [log](assets/logs/log_replica_ovis.txt)  |
 
 ---
 
