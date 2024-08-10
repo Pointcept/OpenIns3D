@@ -29,7 +29,7 @@ class OpenIns3D():
 
         # get all the scene names for the dataset
 
-        self.scene_name = [scene.split('/')[-1].split('.')[0] for scene in sorted(glob(f"{self.dataset_path}/scenes/*"))][:5]
+        self.scene_name = [scene.split('/')[-1].split('.')[0] for scene in sorted(glob(f"{self.dataset_path}/scenes/*"))]
 
         if image_detector.lower() == "yoloworld":
             self.lookup.call_YOLOWORLD()
