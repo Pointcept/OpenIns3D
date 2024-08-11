@@ -11,10 +11,9 @@ import os
 from utils import read_plymesh
 from glob import glob
 import torch.nn.functional as F
-from build_lookup_yoloworld import YOLOWORLD
-from build_lookup_odise import ODISE
 from utils import *
 from snap import Snap
+import cv2
 
 
 class Lookup:
@@ -28,16 +27,18 @@ class Lookup:
         self.text_input = text_input
 
     def call_ODISE(self):
+        from build_lookup_odise import ODISE
         if hasattr(self, 'YOLOWORLD'):
             delattr(self, 'YOLOWORLD')
         self.ODISE = ODISE(self.snap_folder, self.results_folder, self.text_input)
 
     def call_YOLOWORLD(self):
+        from build_lookup_yoloworld import YOLOWORLD
         if hasattr(self, 'ODISE'):
             delattr(self, 'ODISE')
         self.YOLOWORLD = YOLOWORLD(self.snap_folder, self.results_folder, self.text_input)
 
-    def mask2pixel_map(self, scan_pc, mask_binary, scene_id, save_image=False, bbox=False):    
+    def mask2pixel_map(self, scan_pc, mask_binary, scene_id, save_image=False, bbox=False, use_depth = False):    
         
         """
         This is the code to calculate the pixel locations for all 3d masks.
@@ -60,7 +61,6 @@ class Lookup:
         num_imgs = len(glob(f"{self.snap_folder}/{scene_id}/pose/*.npy"))
         self.num_imgs = num_imgs
 
-
         if save_image:
             if not os.path.exists(f"{self.results_folder}/{scene_id}"):os.makedirs(f"{self.results_folder}/{scene_id}/")
         # start to calculate the mask2pixel map
@@ -78,12 +78,24 @@ class Lookup:
                 save_mask2pixel_map = None
 
             # calculate the mask2pixel map
-            mask2pxiel_map, _ = mask_rasterization(
-                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
-                self.image_width, self.image_height, 2, 
-                name=save_mask2pixel_map, display_rate_calculation=False
+            if not use_depth:
+                mask2pxiel_map, _ = mask_rasterization(
+                    scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                    self.image_width, self.image_height, 2, 
+                    name=save_mask2pixel_map, display_rate_calculation=False
             )
-            mask2pxiel_map_list[:,:,angle] = mask2pxiel_map
+                mask2pxiel_map_list[:,:,angle] = mask2pxiel_map
+            else:
+                depth_map_file = f"{self.snap_folder}/{scene_id}/depth/depth_rendered_angle_{angle}.png"
+                depth = cv2.imread(depth_map_file, -1)
+                filter_index = filter_pcd_with_depthmap(scan_pc[:, :3], torch.from_numpy(intrinsic_matrix).cuda(), torch.from_numpy(depth.astype(np.int32)).cuda(), torch.from_numpy(camera_to_world).cuda(), device="cuda")
+                filter_index = filter_index.cpu().numpy()
+                mask2pxiel_map, _ = mask_rasterization(
+                    scan_pc[filter_index, :], mask_binary[filter_index, :], camera_to_world, intrinsic_matrix, 
+                    self.image_width, self.image_height, 1, 
+                    name=save_mask2pixel_map, display_rate_calculation=False
+                )
+                mask2pxiel_map_list[:,:,angle] = mask2pxiel_map
 
         if bbox:
             return self.bbox_from_mask2pixel(mask2pxiel_map_list)
@@ -165,7 +177,7 @@ class Lookup:
             labels_for_pred = pred_label_list[i]
             pred_mask[project_mask==-1] = 0 # only consider the pixel that has a projection
 
-            assigned_masks, score_masks = assign_pred_mask_to_gt(pred_mask, project_mask, 0.3)
+            assigned_masks, score_masks = assign_pred_mask_to_gt(pred_mask, project_mask, 0.5)
             for mask_3d_idx, pred_2d in assigned_masks.items():
                 perdiction_collections[int(mask_3d_idx)].append(int(labels_for_pred[pred_2d])) 
                 score_colletions[int(mask_3d_idx)].append(score_masks[mask_3d_idx])
@@ -248,17 +260,17 @@ class Lookup:
 
         return perdiction_collections, score_colletions
 
-    def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.3):
+    def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.3, use_2d = False):
 
         if hasattr(self, 'YOLOWORLD'):
             bbox = True
-            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=False, bbox=bbox)
+            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox, use_depth = use_2d)
             mask, label = self.YOLOWORLD.build_lookup_dict(scene_id, save = True)
             perdiction_collections, score_colletions = self.assign_label_with_bbox(mask2pxiel_map_list, mask, label, threshold) 
             mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
         elif hasattr(self, 'ODISE'):
             bbox = False
-            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox)
+            mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox, use_depth = use_2d)
             mask, label = self.ODISE.build_lookup_dict(scene_id, save = True)
             perdiction_collections, score_colletions = self.asslign_label_with_pixel(mask2pxiel_map_list, mask, label)
             mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
@@ -270,49 +282,59 @@ class Lookup:
 if __name__ == "__main__":
 
     # Define image dimensions
-    image_width = 800
-    image_height = 800
+    # image_width = 800
+    # image_height = 800
 
-    remove_lip = 0.5  # Distance to remove the ceiling or upper part of the scene for better visibility, if needed
+    image_width = 360
+    image_height = 640
+
+    remove_lip = 0  # Distance to remove the ceiling or upper part of the scene for better visibility, if needed
     image_size = [image_width, image_height]
 
 
     # Path to the mesh file
-    mesh_path = "/home/zelda/zh340/myzone/OpenIns3D_final_github/openins3d_data/replica/scenes/office2.ply"
+    mesh_path = "data/replica/scenes/office3.ply"
 
     # Load pcd from mesh
     pcd_rgb, _ = read_plymesh(mesh_path)
     pcd_rgb = np.hstack((pcd_rgb[:, :3], pcd_rgb[:, 6:9]))
 
     # Load the mask data and generate labels
-    mask_path = "/home/zelda/zh340/myzone/OpenIns3D_final_github/openins3d_data/replica/masks/ground_truth/office2.pt"
-    mask_list = torch.load(mask_path)[0]
+    mask_path = "data/replica/masks/ground_truth/office3.pt"
 
-    text_prompts_replica, VALID_CLASS_IDS = get_label_and_ids("Replica")
-    snap_folder = "snap_outcomes"
-    save_folder = "lookup_outcomes"
 
+    text_prompts_replica, VALID_CLASS_IDS = get_label_and_ids("replica")
+    snap_folder = "replica_oi3_depth"
+    save_folder = "output/lookup_folder"
+
+    scene_id = mesh_path.split("/")[-1].split(".")[0]
     lookup_module = Lookup(image_size, remove_lip, snap_folder, text_input=text_prompts_replica, results_folder = save_folder)
 
     # test 1: compute the mask2pixel map
     lookup_module.call_YOLOWORLD()
-    masks, score = lookup_module.lookup_pipelie(pcd_rgb, mask_list, "office2", threshold = 0.3)
+    pcd_rgb = torch.tensor(pcd_rgb).cuda()
+    mask_list = torch.load(mask_path).to_dense().cuda()
+    mask2pxiel_map_list = lookup_module.mask2pixel_map(pcd_rgb, mask_list, scene_id, save_image=False, bbox=True)
+    mask, label = lookup_module.YOLOWORLD.build_lookup_dict(scene_id, save = True)
+    perdiction_collections, score_colletions = lookup_module.assign_label_with_bbox(mask2pxiel_map_list, mask, label, 0.3) 
+    masks, score = lookup_module.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
+
     all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
     label_results = [text_prompts_replica[i] for i in masks if i != -1]
     mask_final = mask_list[:, all_valid_idx]   
     detection_results_yolo = [mask_final, label_results]
 
-    lookup_module.call_ODISE()
-    masks, score = lookup_module.lookup_pipelie(pcd_rgb, mask_list, "office2", threshold = 0.3)
-    all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
-    label_results = [text_prompts_replica[i] for i in masks if i != -1]
-    mask_final = mask_list[:, all_valid_idx]
-    detection_results_odise = [mask_final, label_results]
+    # lookup_module.call_ODISE()
+    # masks, score = lookup_module.lookup_pipelie(pcd_rgb, mask_list, "office2", threshold = 0.3)
+    # all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
+    # label_results = [text_prompts_replica[i] for i in masks if i != -1]
+    # mask_final = mask_list[:, all_valid_idx]
+    # detection_results_odise = [mask_final, label_results]
 
     # # plot the results
     adjust_camera = [5, 0.1, 0.5]
     snap_module = Snap(image_size, adjust_camera, save_folder=save_folder)
     snap_module.scene_image_rendering(mesh_path, "odise_results_vis_yolo", mode=["global"], mask=detection_results_yolo)
-    snap_module.scene_image_rendering(mesh_path, "odise_results_vis_odise", mode=["global"], mask=detection_results_odise)
+    # snap_module.scene_image_rendering(mesh_path, "odise_results_vis_odise", mode=["global"], mask=detection_results_odise)
 
 

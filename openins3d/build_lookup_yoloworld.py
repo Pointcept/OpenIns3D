@@ -21,6 +21,8 @@ import glob
 import cv2 
 import os
 import random
+from PIL import Image
+import clip
 from utils import get_image_resolution, get_label_and_ids, plot_bounding_boxes
 
 # add to sys path
@@ -38,6 +40,7 @@ class YOLOWORLD:
         self.load_yolo()
         self.Save_path = Save_path
         self.Snap_path = Snap_path
+        self.clip_model, self.preprocess = clip.load("ViT-B/32", device="cuda")
 
     def load_yolo(self):
         # learnt from new work https://github.com/aminebdj/OpenYOLO3D for easy use of YOLO-World
@@ -65,7 +68,7 @@ class YOLOWORLD:
         self.runner.pipeline = Compose(cfg.test_dataloader.dataset.pipeline)
         self.runner.model.eval()
 
-    def build_lookup_dict(self, scene, save = True): 
+    def build_lookup_dict(self, scene, save = True, single_detection = False): 
 
         num_images = len(glob.glob(f"{self.Snap_path}/{scene}/image/*"))
         scene_preds = {}
@@ -85,25 +88,58 @@ class YOLOWORLD:
         # Initialize templates for bounding boxes and labels
         bbox_template = torch.full((len(scene_preds), 40, 4), -1, dtype=torch.float32)
         label_template = torch.full((len(scene_preds), 40), -1, dtype=torch.int64)
+        if single_detection:
+            score_template = torch.full((len(scene_preds), 40), -1, dtype=torch.float32)
                 
         # Plot bounding boxes and update templates
         for i, (image_path, prediction) in enumerate(zip(all_images, scene_preds.values())):
             img_name = osp.basename(image_path)
             bboxes = prediction["bbox"]
             labels = prediction["labels"]
-            # Store the results in the template
             bbox_template[i, :len(bboxes)] = bboxes
             label_template[i, :len(labels)] = labels
-        # Filter out large bounding boxes
-        bbox_template, label_template = self.filtering_predict_mask(bbox_template, label_template, threshold=0.5)
+            if single_detection:
+                # start to calculate similarity for specific object detection
+                cropped_images = []
+                image_full = cv2.imread(image_path)
+                for j, bbox in enumerate(prediction["bbox"]):
+                    x1, y1, x2, y2 = map(int, bbox)  # Convert bbox coordinates to integers
+                    # Crop and process the image
+                    crop = cv2.cvtColor(image_full[y1:y2, x1:x2], cv2.COLOR_BGR2RGB)
+                    crop_image = Image.fromarray(crop)
+                    cropped_images.append(crop_image)
+                if len(cropped_images) == 0:
+                    continue
+                similarity = self.clip_features_calculate(cropped_images, self.texts)
+                score_template[i, :len(labels)] = similarity.reshape(-1)
+
+
+        # bbox_template, label_template = self.filtering_predict_mask_clip(bbox_template, label_template, score_template, threshold=0.5)
+        if single_detection:
+            bbox_template, label_template = self.filtering_predict_mask_score(score_template, bbox_template, label_template, threshold=0.5)
+        else:
+            bbox_template, label_template = self.filtering_predict_mask(bbox_template, label_template, threshold=0.5)
 
         if save:
             for i, (image_path, prediction) in enumerate(zip(all_images, scene_preds.values())):
                 img_name = osp.basename(image_path)
                 if not os.path.exists(f"{self.Save_path}/{scene}"): os.makedirs(f"{self.Save_path}/{scene}")
                 plot_bounding_boxes(image_path, bbox_template[i], [self.texts[label][0] for label in label_template[i]], f"{self.Save_path}/{scene}/{img_name}")
-            
         return bbox_template, label_template
+
+    def clip_features_calculate(self, cropped_images, text_input):
+        
+        """
+        This is used to filter false detection for specific object detection
+        """
+        text = clip.tokenize(text_input[0]).cuda()
+        with torch.no_grad():
+            text_features = self.clip_model.encode_text(text).cuda()
+        images = torch.stack([self.preprocess(single_img).cuda() for single_img in cropped_images])
+        with torch.no_grad():
+            image_features = self.clip_model.encode_image(images)
+        similarity = 100.0 * image_features @ text_features.T
+        return torch.tensor(similarity)
 
     def inference_detector(self, images_batch):
         
@@ -171,6 +207,49 @@ class YOLOWORLD:
         filtered_label = torch.where(valid_mask, pred_label, torch.tensor(-1)).cuda()
 
         return filtered_bbox, filtered_label
+
+    def filtering_predict_mask_score(self, score, pred_bbox, pred_label, threshold=0.5):
+        """
+        Filters out bounding boxes that are too large and cover the whole image.
+
+        Parameters:
+        score (torch.Tensor): Tensor of shape [num_imgs, num_masks] containing scores.
+        pred_bbox (torch.Tensor): Tensor of shape [num_imgs, num_masks, 4] containing bounding boxes.
+        pred_label (torch.Tensor): Tensor of shape [num_imgs, num_masks] containing labels.
+        threshold (float): Threshold for filtering out large bounding boxes.
+
+        Returns:
+        filtered_bbox (torch.Tensor): Filtered bounding boxes.
+        filtered_label (torch.Tensor): Filtered labels.
+        """
+
+        # Calculate the normalized area of the bounding boxes
+        area = ((pred_bbox[:, :, 2] - pred_bbox[:, :, 0]) *
+                (pred_bbox[:, :, 3] - pred_bbox[:, :, 1])) / (self.width * self.height)
+
+        # Mask to filter out bounding boxes with area larger than the threshold
+        valid_mask = area < threshold
+
+        # Apply the valid mask to filter bounding boxes, labels, and scores
+        filtered_bbox = torch.where(valid_mask[:, :, None], pred_bbox, torch.tensor(-1.0, device=pred_bbox.device))
+        filtered_label = torch.where(valid_mask, pred_label, torch.tensor(-1, device=pred_label.device))
+        filtered_score = torch.where(valid_mask, score, torch.tensor(-1.0, device=score.device))
+
+        # Flatten and sort the filtered scores in descending order
+        sorted_scores, _ = torch.sort(filtered_score.view(-1), descending=True)
+
+        # Determine the threshold score (10th highest if possible)
+        if len(sorted_scores) >= 10:
+            tenth_highest_score = sorted_scores[9]
+        else:
+            tenth_highest_score = sorted_scores[-1]  # Handle cases with fewer than 10 scores
+        # Update valid mask to only keep masks with scores higher than the 10th highest score
+        valid_mask = filtered_score >= tenth_highest_score
+        # Apply the final valid mask to the bounding boxes and labels
+        filtered_bbox = torch.where(valid_mask[:, :, None], filtered_bbox, torch.tensor(-1.0, device=filtered_bbox.device)).cuda()
+        filtered_label = torch.where(valid_mask, filtered_label, torch.tensor(-1, device=filtered_label.device)).cuda()
+        return filtered_bbox, filtered_label
+
 
 def main():
 

@@ -364,6 +364,9 @@ class Snap:
         mask_binary = detected_mask[idx_remained, :]
         scan_pc = scan_pc[idx_remained, :]
         scan_pc = torch.tensor(scan_pc, dtype=torch.float32, device=self.device)
+        num_mask = mask_binary.shape[1]
+        if num_mask==0:
+            return None
 
         num_image = len(glob.glob(f"{self.save_folder}/{self.scene_name}/image/*.png"))
 

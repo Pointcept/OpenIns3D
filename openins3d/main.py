@@ -11,26 +11,28 @@ from collections import defaultdict
 import argparse
 from tqdm import tqdm
 
-class OpenIns3D():
+class OpenIns3D:
 
     """
     This is the main code for OpenIns3D that combined Mask, Snap and Lookup for open world scene understanding.
     """
 
-    def __init__(self, dataset_name, dataset_path, snap_folder = "output/snap_folder", save_folder = "output/results", image_detector = "yoloworld", mode = "OVIS"):
+    def __init__(self, dataset_name, dataset_path, snap_folder = "output/snap", save_folder = "output/results", image_detector = "yoloworld", mode = "OVIS", use_2d = False, vis = True): 
 
         self.dataset_name = dataset_name
         self.dataset_path = dataset_path
         self.save_folder = save_folder
         self.CLASS_LABELS, self.VALID_CLASS_IDS = get_label_and_ids(dataset_name)
-        self.initilize_snap_lookup_parameters(dataset_name)
+        self.initilize_snap_lookup_parameters(dataset_name, use_2d)
+        self.use_2d = use_2d
+        self.save_vis = vis
+        if self.use_2d:
+            snap_folder = f"{dataset_path}/rgbd"
         self.snap = Snap(self.image_size, self.adjust_camera, snap_folder)
         self.lookup = Lookup(self.image_size, self.adjust_camera[2], snap_folder, text_input=self.CLASS_LABELS, results_folder = save_folder)
 
         # get all the scene names for the dataset
-
-        self.scene_name = [scene.split('/')[-1].split('.')[0] for scene in sorted(glob(f"{self.dataset_path}/scenes/*"))][:5]
-
+        self.scene_name = [scene.split('/')[-1].split('.')[0] for scene in sorted(glob(f"{self.dataset_path}/scenes/*"))]
         if image_detector.lower() == "yoloworld":
             self.lookup.call_YOLOWORLD()
         elif image_detector.lower() == "odise":
@@ -78,10 +80,10 @@ class OpenIns3D():
                     pcd_rgb = pcd_rgb[0]
                 elif self.dataset_name == 's3dis':
                     self.snap.scene_image_rendering(pcd_rgb, scene, mode=["global", "wide", "corner"])
-                elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
+                elif (self.dataset_name == 'replica' or self.dataset_name == 'scannet') and not self.use_2d:
                     self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
                 # lookup
-                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5)
+                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.3, use_2d = self.use_2d)
                 # log the results
                 torch.save(mask_classfication, f"{self.save_folder}/{scene}/{scene}_mask_classfication.pt")
                 torch.save(score, f"{self.save_folder}/{scene}/{scene}_score.pt")
@@ -95,8 +97,9 @@ class OpenIns3D():
                 'pred_classes': pred_class if len(pred_masks) > 0 else torch.ones(1)*255
             }
 
-            # visualize
-            # self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+            if self.save_vis:
+                self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
 
         evaluate(predict_results, f"{dataset_path}/ground_truth/", self.CLASS_LABELS, self.VALID_CLASS_IDS,  f"{self.save_folder}/{self.dataset_name}_final_result.csv")
 
@@ -130,7 +133,7 @@ class OpenIns3D():
                 elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
                     self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
                 # lookup
-                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5)
+                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5 , use_2d = self.use_2d)
                 # log the results
                 torch.save(mask_classfication, f"{self.save_folder}/{scene}/{scene}_mask_classfication.pt")
                 torch.save(score, f"{self.save_folder}/{scene}/{scene}_score.pt")
@@ -145,11 +148,13 @@ class OpenIns3D():
             }
 
             scene_pcds.append(torch.from_numpy(pcd_rgb))
+
             # visualize
-            # self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+            if self.save_vis:
+                self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
 
         evaluate_bbox(predict_results, f"{dataset_path}/ground_truth/", scene_pcds, self.CLASS_LABELS, self.VALID_CLASS_IDS,  f"{self.save_folder}/{self.dataset_name}_final_result.csv")
-
 
     def OV_object_recognition(self):
 
@@ -173,10 +178,10 @@ class OpenIns3D():
                     pcd_rgb = pcd_rgb[0]
                 elif self.dataset_name == 's3dis':
                     self.snap.scene_image_rendering(pcd_rgb, scene, mode=["global", "wide", "corner"])
-                elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
-                    self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
+                # elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
+                #     self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
                 # lookup
-                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5)
+                mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5, use_2d = self.use_2d)
                 # log the results
                 torch.save(mask_classfication, f"{self.save_folder}/{scene}/{scene}_mask_classfication.pt")
                 torch.save(score, f"{self.save_folder}/{scene}/{scene}_score.pt")
@@ -185,32 +190,22 @@ class OpenIns3D():
             predict_labels = [self.VALID_CLASS_IDS[i] if i != -1 else -1 for i in mask_classfication]
             class_counts = openworld_recognition(mask_list, predict_labels, f"{dataset_path}/ground_truth/{scene}.txt", class_counts, self.VALID_CLASS_IDS)
 
-            # visualize
-            # self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
         display_results(class_counts, self.VALID_CLASS_IDS, self.CLASS_LABELS)
 
+    def initilize_snap_lookup_parameters(self, dataset_name, use_2d = False):
 
-    def initilize_snap_lookup_parameters(self, dataset_name):
-
-        if dataset_name == 'replica' or dataset_name == 'scannet' or dataset_name == 's3dis':
-            image_width = 800
-            image_height = 800
-            self.image_size = [image_width, image_height]
-            # Camera adjustment parameters
-            lift_cam = 2  # Vertical lift of the camera (increase to lift the camera higher)
-            zoomout = 0.1  # Zoom out factor to view the scene with a wider angle
-            remove_lip = 1.0  # Distance to remove the ceiling or upper part of the scene for better visibility, if needed
-            self.adjust_camera = [lift_cam, zoomout, remove_lip]
-        
+        if dataset_name in ['scannet', 's3dis', 'replica'] and not (dataset_name == 'replica' and use_2d):
+            image_width, image_height = 800, 800
+            lift_cam, zoomout, remove_lip = 3, 0.1, 1.0
         elif dataset_name == 'stpls3d':
-            image_width = 1000
-            image_height = 1000
-            self.image_size = [image_width, image_height]
-            # Camera adjustment parameters
-            lift_cam = 20 # Vertical lift of the camera (increase to lift the camera higher)
-            zoomout = 0.1  # Zoom out factor to view the scene with a wider angle
-            remove_lip = 0  # Distance to remove the ceiling or upper part of the scene for better visibility, if needed
-            self.adjust_camera = [lift_cam, zoomout, remove_lip]
+            image_width, image_height = 1000, 1000
+            lift_cam, zoomout, remove_lip = 20, 0.1, 0
+        elif dataset_name == 'replica' and use_2d:
+            image_width, image_height = 360, 640
+            lift_cam, zoomout, remove_lip = 2, 0.1, 0
+
+        self.image_size = [image_width, image_height]
+        self.adjust_camera = [lift_cam, zoomout, remove_lip]            
 
     def filter_results(self, mask_classfication, score, scene_mask):
 
@@ -253,11 +248,16 @@ def get_args():
     parser.add_argument('--dataset', default="Replica", type=str, help='dataset to test on')
     parser.add_argument('--task', default="OVIS", type=str, help='tasks to perform: could be OVOD, OVIS, OVOR')
     parser.add_argument('--detector', default="yoloworld", type=str, help='image detector to use: could be yoloworld, odise')
+    parser.add_argument('--use_2d', default=False, type=lambda x: (str(x).lower() == 'true'), help='Use 2D images or not (for ScanNet and Replica).')
+    # add visualization
+    parser.add_argument('--save_vis', default=True, type=lambda x: (str(x).lower() == 'true'), help='Visualize the results or not.')
+
     args = parser.parse_args()
     return args
+
 
 if __name__ == '__main__':
     args = get_args()
     dataset_name = args.dataset
     dataset_path = f'./data/{dataset_name.lower()}'
-    openins3d = OpenIns3D(dataset_name.lower(), dataset_path, image_detector = args.detector, mode = args.task)
+    openins3d = OpenIns3D(dataset_name.lower(), dataset_path, image_detector = args.detector, mode = args.task, use_2d = args.use_2d, vis = args.save_vis)

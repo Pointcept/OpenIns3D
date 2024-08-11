@@ -108,7 +108,6 @@ python openins3d/main.py --dataset replica --task OVIS --detector yoloworld
 |-----------------------------|:----:|:----:|:----:|:----:|
 | Replica OVIS (in paper)      | 13.6 | 18.0 | 19.7 |      |
 | Replica OVIS (this Code)     | 15.4 | 19.5 | 25.2 | [log](assets/logs/log_replica_ovis.txt)  |
-
 ---
 
 ### 🗂️ ScanNet
@@ -194,6 +193,37 @@ python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 
 ---
 
+# Use orginial RGBD to replace Snap
+
+we also eveulate the performane of openins3d when the snap module is repalced with the original rgbd images, with other design intact.
+
+### 🗂️ Replica
+
+**🔧 Data Preparation**:  
+1. Download the Replica dataset and RGBD images:
+
+```sh
+sh scripts/prepare_replica.sh
+sh scripts/prepare_replica2d.sh
+```
+
+**📊 Open Vocabulary Instance Segmentation**:  
+
+```sh
+python openins3d/main.py --dataset replica --task OVIS --detector yoloworld --use_2d true
+```
+
+
+**📈 Results Log**:  
+| Task                          |  AP  | AP50 | AP25 | Log                                       |
+|-------------------------------|:----:|:----:|:----:|:-----------------------------------------:|
+| OpenMask3D     | 13.1 | 18.4 | 24.2 |                                           |
+| Open3DIS       | 18.5 | 24.5 | 28.2 |                                           |
+| OpenIns3D     | 21.1 | 26.2 | 30.6 | [log](assets/logs/log_replica_use2d_ovis.txt) |
+
+---
+
+Let me know if you need any more adjustments!
 
 # 🎯 Zero-Shot Inference
 
