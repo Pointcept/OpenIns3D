@@ -61,18 +61,19 @@ cd ../..
 
 ```bash
 
+export CPATH=/usr/local/cuda/include:$CPATH
 # Install Mask module to produce mask
 conda install nltk
 cd third_party/pointnet2
 python setup.py install
 cd ../
 
-export CPATH=/usr/local/cuda/include:$CPATH
 # install MinkowskiEngine for MPM
 git clone --recursive "https://github.com/NVIDIA/MinkowskiEngine" # clone the repo to third_party
 cd MinkowskiEngine
 git checkout 02fc608bea4c0549b0a7b00ca1bf15dee4a0b228
 python setup.py install --force_cuda --blas=openblas
+pip install hydra-core loguru albumentations open3d
 cd ../../
 
 # Up here you have the full pipeline of OpenIns3D. you can now do the zero-shot inference on your own data

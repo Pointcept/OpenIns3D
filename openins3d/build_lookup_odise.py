@@ -111,7 +111,7 @@ class ODISE:
         num_images = len(glob.glob(f"{self.Snap_path}/{scene}/image/*"))
         width, heigh = get_image_resolution(glob.glob(f"{self.Snap_path}/{scene}/image/*")[0])
 
-        panoptic_seg_list = torch.zeros((num_images, width, heigh), dtype=torch.int64)
+        panoptic_seg_list = torch.zeros((num_images, heigh, width), dtype=torch.int64)
         labels = torch.ones((num_images, 80), dtype=torch.int64) * -1
         
         with ExitStack() as stack:

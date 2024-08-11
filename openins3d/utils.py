@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch_scatter import scatter_max
 from matplotlib.colors import ListedColormap
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import random
 import cv2
@@ -69,6 +70,15 @@ def get_label_and_ids(dataset):
     
     return CLASS_LABELS, VALID_CLASS_IDS
 
+def generate_distinguished_colors(num_colors, seed=42):
+    random.seed(seed)
+    hsv_colors = [(i / num_colors, 1.0, 1.0) for i in range(num_colors)]
+    rgb_colors = [mcolors.hsv_to_rgb(hsv) for hsv in hsv_colors]
+    random.shuffle(rgb_colors)
+    rgb_colors = np.array(rgb_colors)
+    return rgb_colors
+
+color_map_array = generate_distinguished_colors(100)
 
 def get_image_resolution(image_path):
     """
@@ -158,7 +168,6 @@ def plot_bounding_boxes(image_path, bboxes, labels, output_path):
     cv2.imwrite(output_path, cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR))
 
 
-
 def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
     """
     pred_mask: [width, heigh, num_image] masks detected in the 2d rendered images
@@ -195,23 +204,21 @@ def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
 
 
 def plot_mask_2_pixel_map(final_depth_map, name):
-
+    
     plot_mask = final_depth_map.cpu().numpy()
 
     # Get unique values in the plot_mask
-    unique_values = np.unique(plot_mask)
-
+    unique_values, count = np.unique(plot_mask, return_counts=True)
     # Create random colors for each unique value
-    rng = np.random.default_rng()  # Using the default random number generator for reproducibility
-    colors = rng.random((len(unique_values), 4))  # Random RGBA colors
+    fixed_color_map = generate_distinguished_colors(100, seed=42)
 
     # Ensure the background (if specified) is white
     bg_index = np.where(unique_values == -1)[0][0] if -1 in unique_values else None
     if bg_index is not None:
-        colors[bg_index] = (1.0, 1.0, 1.0, 1.0)  # RGBA for white
+        fixed_color_map[bg_index] = (1.0, 1.0, 1.0)  # RGBA for white
 
     # Create the custom colormap
-    custom_cmap = ListedColormap(colors)
+    custom_cmap = ListedColormap(fixed_color_map)
 
     # Plot the mask with the custom colormap
     plt.imshow(plot_mask, cmap=custom_cmap, interpolation='none')
@@ -219,6 +226,50 @@ def plot_mask_2_pixel_map(final_depth_map, name):
     plt.close()
 
 
+def filter_pcd_with_depthmap(points, depth_intrinsic, depth, pose, device):
+    """
+    :param points: N x 3 format
+    :param depth: H x W format
+    :param intrinsic: 3x3 format
+    :return p: N x 2 format
+    """
+
+    vis_thres = 0.1
+    depth_shift = 1000.0
+    depth_shift = 6553.5
+    
+    fx = depth_intrinsic[0,0]
+    fy = depth_intrinsic[1,1]
+    cx = depth_intrinsic[0,2]
+    cy = depth_intrinsic[1,2]
+    bx = depth_intrinsic[0,3]
+    by = depth_intrinsic[1,3]
+    
+    points_world = torch.cat([points, torch.ones((points.shape[0], 1), dtype=torch.float64).to(device)], dim=-1).to(torch.float64)
+    world_to_camera = torch.inverse(pose).to(torch.float64)
+    
+    p = torch.matmul(world_to_camera, points_world.T)  # [Xb, Yb, Zb, 1]: 4, n
+    p[0] = ((p[0] - bx) * fx) / p[2] + cx 
+    p[1] = ((p[1] - by) * fy) / p[2] + cy
+    
+    all_idx = torch.arange(0, len(points)).to(device)  # to save the corresponding point idx later as the prompt ID
+    # out-of-image check
+    idx = torch.unique(torch.cat([torch.where(p[0]<=0)[0], torch.where(p[1]<=0)[0], \
+                                    torch.where(p[0]>=depth.shape[1]-1)[0], \
+                                    torch.where(p[1]>=depth.shape[0]-1)[0]], dim=0), dim=0)
+    keep_idx = all_idx[torch.isin(all_idx, idx, invert=True)]
+    p = p[:, keep_idx]
+
+    if p.shape[1] == 0:
+        return keep_idx  # no 3D prompt is visible in this frame
+
+    pi = torch.round(p).to(torch.int64)
+    # Check occlusion
+    est_depth = p[2]
+    trans_depth = depth[pi[1], pi[0]] / depth_shift
+    idx_keep = torch.where(torch.abs(est_depth - trans_depth) <= vis_thres)[0]
+    keep_idx = keep_idx[idx_keep]
+    return keep_idx
 
 def generate_neighbors(thickness):
     
@@ -232,11 +283,11 @@ def generate_neighbors(thickness):
 
     return neighbor_indices
 
-def display_rate_compute(mask_map, occlusion_map, num_points_for_masks):
+def display_rate_compute(mask_map, occlusion_map, num_points_for_masks, num_masks):
     
     "display_rate = number_of_point_not_occluded / total_number_of_points_for_the_mask"
     "number_of_point_not_occluded: number of points that has not been occluded by other masks or background; it is ok to be occluded by itself"
-    max_mask_idx = mask_map.max()
+    max_mask_idx = num_masks - 1
     mask_idx_list = torch.range(0, max_mask_idx, device = 'cuda') # skip the background -1
     binary_mask = (mask_map == mask_idx_list).float()
     product = binary_mask * occlusion_map
@@ -324,10 +375,10 @@ def mask_rasterization(all_point, mask_bin, pose_matrix, depth_intrinsic, width,
     num_masks = mask_bin.shape[1]
     # the list of mask_map, depth_map, occlusion_map for each mask, all in the shape of (width, height, num_masks)
     mask_map_total = torch.ones((width, height, num_masks), device = 'cuda')  # -1 for background
-    depth_map_total = torch.ones((width, height, num_masks), device = 'cuda') * 999 
+    depth_map_total = torch.ones((width, height, num_masks), device = 'cuda') * 999999 
     display_map_total = torch.zeros((width, height, num_masks), device = 'cuda')
 
-    num_points_for_masks = torch.sum(mask_bin, axis=0).cuda()
+    num_points_for_masks = torch.sum(mask_bin.bool(), axis=0).cuda()
 
     for mask_idx in range(num_masks):
         indices = torch.nonzero(mask_bin[:, mask_idx])
@@ -338,13 +389,14 @@ def mask_rasterization(all_point, mask_bin, pose_matrix, depth_intrinsic, width,
         mask_map_total[:,:,mask_idx] = mask_map
         depth_map_total[:,:,mask_idx] = depth_map
         display_map_total[:,:,mask_idx] = occulsion_map
-    
+
     depth_map_max_idx = torch.argmin(depth_map_total, axis=-1)
     condensed_depth_map = mask_map_total[torch.arange(mask_map_total.shape[0])[:, None, None], torch.arange(mask_map_total.shape[1])[None, :, None], depth_map_max_idx[:, :, None]]
+
     final_depth_map = condensed_depth_map.int().transpose(1,0).squeeze()
 
     if display_rate_calculation: # to be refined
-        display_rate = display_rate_compute(condensed_depth_map, display_map_total, num_points_for_masks)
+        display_rate = display_rate_compute(condensed_depth_map, display_map_total, num_points_for_masks, num_masks)
     else:
         display_rate = None
 
@@ -366,7 +418,7 @@ def mask_lable_location(all_point, mask_bin, pose_matrix, depth_intrinsic, width
 
     mask2pxiel_map, _ = mask_rasterization(all_point, mask_bin, pose_matrix, depth_intrinsic, width, height, point_size = 1, name = None, display_rate_calculation = False)
     mask2pxiel_map = mask2pxiel_map.unsqueeze(-1)
-    max_mask_idx = mask2pxiel_map.max()
+    max_mask_idx = mask_bin.shape[1] - 1
     mask2pxiel_map[mask2pxiel_map == -1] = max_mask_idx + 1
     num_classes = int(max_mask_idx) + 2
     one_hot_encoded = F.one_hot(mask2pxiel_map.long(), num_classes=num_classes)
