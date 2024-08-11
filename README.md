@@ -193,9 +193,9 @@ python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 
 ---
 
-# Use orginial RGBD to replace Snap
+# Use original RGBD 📷 to replace Snap 
 
-we also eveulate the performane of openins3d when the snap module is repalced with the original rgbd images, with other design intact.
+we also evaluate the performance of openins3d when the snap module is replaced with the original RGB-D images, with other designs intact.
 
 ### 🗂️ Replica
 
