@@ -212,6 +212,8 @@ class YOLOWORLD:
         """
         Filters out bounding boxes that are too large and cover the whole image.
 
+        and when the CLIP score is lower than the 10th highest score, it will be filtered out.
+
         Parameters:
         score (torch.Tensor): Tensor of shape [num_imgs, num_masks] containing scores.
         pred_bbox (torch.Tensor): Tensor of shape [num_imgs, num_masks, 4] containing bounding boxes.
@@ -250,9 +252,7 @@ class YOLOWORLD:
         filtered_label = torch.where(valid_mask, filtered_label, torch.tensor(-1, device=filtered_label.device)).cuda()
         return filtered_bbox, filtered_label
 
-
 def main():
-
     vocab, _ = get_label_and_ids("Replica")
     Save_path = "Lookup_dict_rgb_new/"
     Snap_path = "/home/zelda/zh340/myzone/OpenIns3D_final_github/OpenIns3D/example_snap/"
@@ -260,8 +260,6 @@ def main():
     YOLOWORLD_scene = YOLOWORLD(Snap_path, Save_path, vocab)
     scene = "scannet_scene_mesh"
     bbox, label = YOLOWORLD_scene.build_lookup_dict(scene, save = True)
-
-    print(bbox.shape, label.shape)
     
 if __name__ == "__main__":
     main()

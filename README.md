@@ -61,7 +61,7 @@
 
 
 # Highlights
-- *2 Aug, 2024*: Major update 🔥: We have released optimized and easy-to-use code for OpenIns3D to [reproduce all the results in the paper](#Reproducing-Results).
+- *2 Aug, 2024*: Major update 🔥: We have released optimized and easy-to-use code for OpenIns3D to [reproduce all the results in the paper](#Reproducing-Results) and [demo](#Zero-Shot-Inference-with-Single-Vocabulary).
 - *1 Jul, 2024*: OpenIns3D has been accepted at ECCV 2024 🎉. We will release more code on various experiments soon.
 - *6 Jan, 2024*: We have released a major revision, incorporating S3DIS and ScanNet benchmark code. Try out the latest version.
 - *31 Dec, 2023* We release the batch inference code on ScanNet.
@@ -71,25 +71,22 @@
 # Overview
 
 - [Installation](#installation)
-- [Reproducing Results](#Reproducing-Results)
-- [Zero shot understanding](#zero-shot-scene-understanding)
+- [Reproducing All Benchmarks Results](#reproducing-results)
+- [Replacing Snap with RGBD](#Replacing-Snap-with-RGBD)
+- [Zero-Shot Inference with Single Vocabulary](#Zero-Shot-Inference-with-Single-Vocabulary)
+- [Zero-Shot Inference with Multiple Vocabulary](#Zero-Shot-Inference-with-Multiple-Vocabulary)
 - [Citation](#citation)
 - [Acknowledgement](#acknowledgement)
-
 
 # Installation
 
 Please check the [installation file](installation.md) to install OpenIns3D for:
-
-1. [reproducing all results in the paper](#reproduce-of-results),
-2. [testing on your own dataset](#zero-shot-scene-understanding), or
-3. using part of the model (e.g., Snap/Snap-Lookup) for your own tasks.
-
-We have detailed the level of installation needed for different purposes.
+1. [reproducing all results in the paper](#reproducing-results),
+2. [testing on your own dataset](#Zero-Shot-Inference-with-Multiple-Vocabulary)
 
 ---
 
-# 🛠️ Reproducing Results
+# Reproducing Results
 
 ### 🗂️ Replica
 
@@ -193,13 +190,15 @@ python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 
 ---
 
-# Use original RGBD 📷 to replace Snap 
 
-we also evaluate the performance of openins3d when the snap module is replaced with the original RGB-D images, with other designs intact.
+# Replacing Snap with RGBD
+
+We also evaluate the performance of OpenIns3D when the Snap module is replaced with original RGBD images while keeping the other design intact.
 
 ### 🗂️ Replica
 
-**🔧 Data Preparation**:  
+**🔧 Data Preparation**  
+
 1. Download the Replica dataset and RGBD images:
 
 ```sh
@@ -207,34 +206,58 @@ sh scripts/prepare_replica.sh
 sh scripts/prepare_replica2d.sh
 ```
 
-**📊 Open Vocabulary Instance Segmentation**:  
+
+**📊 Open Vocabulary Instance Segmentation**
 
 ```sh
 python openins3d/main.py --dataset replica --task OVIS --detector yoloworld --use_2d true
+python openins3d/main.py --dataset replica --task OVIS --detector yoloworld --use_2d true
+python openins3d/main.py --dataset scannet200 --task OVIS --detector yoloworld --use_2d true
 ```
 
+**📈 Results Log**  
+| Task           |  AP  | AP50 | AP25 | Log                                      |
+|----------------|:----:|:----:|:----:|:----------------------------------------:|
+| OpenMask3D     | 13.1 | 18.4 | 24.2 |                                          |
+| Open3DIS       | 18.5 | 24.5 | 28.2 |                                          |
+| OpenIns3D      | 21.1 | 26.2 | 30.6 | [log](assets/logs/log_replica_use2d_ovis.txt) |
 
-**📈 Results Log**:  
-| Task                          |  AP  | AP50 | AP25 | Log                                       |
-|-------------------------------|:----:|:----:|:----:|:-----------------------------------------:|
-| OpenMask3D     | 13.1 | 18.4 | 24.2 |                                           |
-| Open3DIS       | 18.5 | 24.5 | 28.2 |                                           |
-| OpenIns3D     | 21.1 | 26.2 | 30.6 | [log](assets/logs/log_replica_use2d_ovis.txt) |
+
+# Zero-Shot Inference with Single Vocabulary
+
+We demonstrate how to perform single-vocabulary instance segmentation similar to the teaser image in the paper. The key new feature is the introduction of a CLIP ranking and filtering module to reduce false-positive results. (Works best with RGBD but is also fine with SNAP.)
+
+Quick Start: 
+
+1. 📥 **Download the demo dataset** by running:
+
+   ```sh
+   sh scripts/prepare_demo_single.sh 
+   ```
+
+2. 🚀 **Run the model** by executing:
+
+   ```sh
+   python zero_shot_single_voc.py
+   ```
+
+
+You can now view results like teaser images in 2D or 3D.
+
 
 ---
 
-Let me know if you need any more adjustments!
+# Zero-Shot Inference with Multiple Vocabulary
 
-# 🎯 Zero-Shot Inference
-
-**ℹ️ Note**: Ensure you have installed the mask module according to the installation guide, as it is not required for reproducing results.
+ℹ️ **Note**: Ensure you have installed the mask module according to the installation guide, as it is not required for reproducing results.
 
 To perform zero-shot scene understanding:
+
 1. 📥 **Download** the `scannet200_val.ckpt` checkpoint from [this link](https://drive.google.com/file/d/1emtZ9xCiCuXtkcGO3iIzIRzcmZAFfI_B/view) and place it in the `third_party/` directory.
 
-2. **To run the model**, execute `python zero_shot.py` and specify:
-   - `pcd_path`: The path to the colored point cloud file.
-   - `vocab`: A list of vocabulary terms to search for.
+2. 🚀 **Run the model** by executing `python zero_shot.py` and specify:
+   - 🗂️ `pcd_path`: The path to the colored point cloud file.
+   - 📝 `vocab`: A list of vocabulary terms to search for.
 
 You can also use the following script to automatically set up the `scannet200_val.ckpt` checkpoint and download some sample 3D scans:
 
@@ -242,26 +265,26 @@ You can also use the following script to automatically set up the `scannet200_va
 sh scripts/prepare_zero_shot.sh
 ```
 
-
 ### 🚀 Running a Zero-Shot Inference
 
 To perform zero-shot inference using the sample dataset (default with Replica vocabulary), run:
 
 ```bash
-python zero_shot.py --pcd_path data/demo_scenes/demo_scene_1.ply
-```
-📂 Results are saved under `output/snap_demo/demo_scene_1_vis/image`.
-
-To use a different 2D detector (🔍 **ODISE works better on pcd rendered images**):
-
-```bash
-python zero_shot.py --pcd_path data/demo_scenes/demo_scene_2.ply --detector yoloworld
+python zero_shot_multi_vocs.py --pcd_path data/demo_scenes/demo_scene_1.ply
 ```
 
-📝 If you want to specify your own vocabulary list, add it with the `--vocab` flag as follows:
+📂 **Results** are saved under `output/snap_demo/demo_scene_1_vis/image`.
+
+To use a different 2D detector (🔍 **ODISE works better on pcd-rendered images**):
 
 ```bash
-python zero_shot.py \
+python zero_shot_multi_vocs.py --pcd_path data/demo_scenes/demo_scene_2.ply --detector yoloworld
+```
+
+📝 **Custom Vocabulary**: If you want to specify your own vocabulary list, add it with the `--vocab` flag as follows:
+
+```bash
+python zero_shot_multi_vocs.py \
 --pcd_path 'data/demo_scenes/demo_scene_4.ply' \
 --vocab "drawers" "lower table"
 ```

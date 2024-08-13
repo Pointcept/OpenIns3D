@@ -32,7 +32,7 @@ from PIL import Image, ImageDraw, ImageFont
 import plyfile
 import numpy as np
 import pandas as pd
-from utils import mask_lable_location
+from utils import mask_lable_location, mask_rasterization
 import glob
 import sys
 
@@ -344,9 +344,12 @@ class Snap:
                     f"{image_folder}/image_rendered_angle_{i}.png"
                 )
 
-        if mask is not None:
-            self.plot_results_label(color_list_save, scan_pc_raw, mask)
-        # add the labels if necessary
+        if mask is not None and mask[1] is not None:
+            # check if mask[1] is a list of strings or list of list of strings
+            if isinstance(mask[1][0], str):
+                self.plot_results_label(color_list_save, scan_pc_raw, mask)
+            else:
+                self.plot_displayrate_label(color_list_save, scan_pc_raw, mask)
         return extrinsic, intrinsic
 
     def plot_results_label(self, color_list_save, scan_pc, mask):
@@ -404,24 +407,76 @@ class Snap:
 
         return None
 
-    def plot_results_display_rate(self, color_list_save, scan_pc, mask):
+    def mask_rasterization_display_rate(self, scan_pc, snap_scene, mask):
+
+        """
+        This function is used to write the name of each mask in the final images. 
+        It works fine but is not very fast, as it uses a for loop to write every label for each mask in each image sequentially
         """
 
+        scene_name = snap_scene
+        detected_mask, labels = mask
+
+        z_max = scan_pc[:, 2].max()
+        idx_remained = scan_pc[:, 2] <= (z_max - self.remove_lip)
+        mask_binary = detected_mask[idx_remained, :]
+        scan_pc = scan_pc[idx_remained, :]
+        scan_pc = torch.tensor(scan_pc, dtype=torch.float32, device=self.device)
+
+        num_image = len(glob.glob(f"{self.save_folder}/{scene_name}/image/*.png"))
+
+
+        if not os.path.exists(f"{self.save_folder}/mask_2_pixe_{snap_scene}"):
+            os.makedirs(f"{self.save_folder}/mask_2_pixe_{snap_scene}")
+        display_rate_all = []
+
+        # calculate the label location with funcation in Lookup
+        for i in range(num_image):
+            camera_to_world = np.load(f"{self.save_folder}/{scene_name}/pose/pose_matrix_calibrated_angle_{i}.npy")
+            intrinsic_matrix = np.load(f"{self.save_folder}/{scene_name}/intrinsic/intrinsic_calibrated_angle_{i}.npy")
+            
+            _, _ = mask_rasterization(
+                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                self.image_width, self.image_height, 2, 
+                name=f"{self.save_folder}/mask_2_pixe_{snap_scene}/mask2pixel_{i}.png", display_rate_calculation=False
+            )
+
+            _, display_rate = mask_rasterization(
+                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                self.image_width, self.image_height, 1, 
+                name=None, display_rate_calculation=True
+            )
+            display_rate_all.append(display_rate)
+        return display_rate_all
+
+    def plot_displayrate_label(self, color_list_save, scan_pc, mask):
+        """
         This function is used to write the name of each mask in the final images. 
         It works fine but is not very fast, as it uses a for loop to write every label for each mask in each image sequentially
 
         """
 
-        detected_mask, _ = mask
+        detected_mask, labels = mask
+
+        z_max = scan_pc[:, 2].max()
+        idx_remained = scan_pc[:, 2] <= (z_max - self.remove_lip)
+        mask_binary = detected_mask[idx_remained, :]
+        scan_pc = scan_pc[idx_remained, :]
+        scan_pc = torch.tensor(scan_pc, dtype=torch.float32, device=self.device)
+
+        num_image = len(glob.glob(f"{self.save_folder}/{self.scene_name}/image/*.png"))
 
         # calculate the label location with funcation in Lookup
-        lookup_module = Lookup([self.image_width, self.image_height], self.remove_lip, snap_folder=self.save_folder)
-        mask2pxiel_map_list = lookup_module.mask2pixel_map(scan_pc, detected_mask, self.scene_name)
-        label_location_visulization = lookup_module.label_location_visulization(mask2pxiel_map_list).cpu().numpy()
-        image_num = label_location_visulization.shape[0]
-        for i in range(image_num):
+        for i in range(num_image):
             image_location = f"{self.save_folder}/{self.scene_name}/image/image_rendered_angle_{i}.png"
-            label_location = label_location_visulization[i]
+            camera_to_world = np.load(f"{self.save_folder}/{self.scene_name}/pose/pose_matrix_calibrated_angle_{i}.npy")
+            intrinsic_matrix = np.load(f"{self.save_folder}/{self.scene_name}/intrinsic/intrinsic_calibrated_angle_{i}.npy")
+            
+            label_location = mask_lable_location(
+                scan_pc, mask_binary, camera_to_world, intrinsic_matrix, 
+                self.image_width, self.image_height, 2, 
+                name=None, display_rate_calculation=False
+            )
 
             # Open the existing image
             img = Image.open(image_location)
@@ -430,17 +485,17 @@ class Snap:
 
             for j in range(label_location.shape[0]):
                 x, y = label_location[j]
+
                 if x == -1 or y == -1:
                     continue
                 # Get text size
-                text = labels[j]
+                text = labels[i][j]
                 text_bbox = draw.textbbox((x, y), text, font=font)
                 text_size = (text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1])
                 # Draw white rectangle as background for the text
                 draw.rectangle([x, y, x + text_size[0], y + text_size[1]], fill='white')
                 # Draw the text over the white rectangle
                 draw.text((x, y), text, font=font, fill=tuple(color_list_save[j]))
-
             img.save(image_location)
 
         return None

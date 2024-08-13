@@ -25,6 +25,7 @@ class Lookup:
         self.results_folder = results_folder
         self.device =  "cuda" if torch.cuda.is_available() else "cpu"
         self.text_input = text_input
+        self.depth_shift = 6553.5
 
     def call_ODISE(self):
         from build_lookup_odise import ODISE
@@ -88,7 +89,7 @@ class Lookup:
             else:
                 depth_map_file = f"{self.snap_folder}/{scene_id}/depth/depth_rendered_angle_{angle}.png"
                 depth = cv2.imread(depth_map_file, -1)
-                filter_index = filter_pcd_with_depthmap(scan_pc[:, :3], torch.from_numpy(intrinsic_matrix).cuda(), torch.from_numpy(depth.astype(np.int32)).cuda(), torch.from_numpy(camera_to_world).cuda(), device="cuda")
+                filter_index = filter_pcd_with_depthmap(scan_pc[:, :3], torch.from_numpy(intrinsic_matrix).cuda(), torch.from_numpy(depth.astype(np.int32)).cuda(), torch.from_numpy(camera_to_world).cuda(), depth_shift= self.depth_shift, device="cuda")
                 filter_index = filter_index.cpu().numpy()
                 mask2pxiel_map, _ = mask_rasterization(
                     scan_pc[filter_index, :], mask_binary[filter_index, :], camera_to_world, intrinsic_matrix, 
@@ -183,12 +184,12 @@ class Lookup:
                 score_colletions[int(mask_3d_idx)].append(score_masks[mask_3d_idx])
         return perdiction_collections, score_colletions
 
-    def multiview_aggregation(self, perdiction_collections, score_colletions, threshold = 0.5):
+    def multiview_aggregation(self, perdiction_collections, score_colletions, threshold = 0.5, single_detection = False):
         final_mask_classfication = {} # this is the final mask classification for each mask in 3d after multi view aggregation
         mask2pixel_lookup_score = {} # this give the score the the prediction
 
         for mask_id, prediction_list in perdiction_collections.items():
-            if len(prediction_list) == 0:
+            if len(prediction_list) == 0 or len(prediction_list) == 1:
                 final_mask_classfication[mask_id] = None
                 mask2pixel_lookup_score[mask_id] = None
                 continue
@@ -260,14 +261,16 @@ class Lookup:
 
         return perdiction_collections, score_colletions
 
-    def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.3, use_2d = False):
+
+    def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.6, use_2d = False, single_detection = False):    
 
         if hasattr(self, 'YOLOWORLD'):
             bbox = True
             mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox, use_depth = use_2d)
-            mask, label = self.YOLOWORLD.build_lookup_dict(scene_id, save = True)
+            mask, label = self.YOLOWORLD.build_lookup_dict(scene_id, save = True,  single_detection = single_detection)
+
             perdiction_collections, score_colletions = self.assign_label_with_bbox(mask2pxiel_map_list, mask, label, threshold) 
-            mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
+            mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5, single_detection = single_detection)
         elif hasattr(self, 'ODISE'):
             bbox = False
             mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox, use_depth = use_2d)
@@ -316,7 +319,9 @@ if __name__ == "__main__":
     mask_list = torch.load(mask_path).to_dense().cuda()
     mask2pxiel_map_list = lookup_module.mask2pixel_map(pcd_rgb, mask_list, scene_id, save_image=False, bbox=True)
     mask, label = lookup_module.YOLOWORLD.build_lookup_dict(scene_id, save = True)
-    perdiction_collections, score_colletions = lookup_module.assign_label_with_bbox(mask2pxiel_map_list, mask, label, 0.3) 
+
+    perdiction_collections, score_colletions = lookup_module.assign_label_with_bbox(mask2pxiel_map_list, mask, label, 0.5) 
+
     masks, score = lookup_module.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
 
     all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]
