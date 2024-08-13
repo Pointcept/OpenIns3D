@@ -27,7 +27,6 @@ def get_args():
     args = parser.parse_args()
     return args
 
-
 if __name__ == "__main__":
     
     print("start to load models>>>>>>>>>>>>>>>>>>>>>>>>")
@@ -40,8 +39,6 @@ if __name__ == "__main__":
     vocab= get_label_and_ids("replica")[0]
     if additional_vocab is not None:
         vocab.extend(additional_vocab)
-
-
 
     name_of_scene = pcd_path.split("/")[-1].split(".")[0]
     if pcd_path.endswith(".ply"):

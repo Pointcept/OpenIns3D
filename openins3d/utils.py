@@ -100,7 +100,6 @@ def read_plymesh(filepath):
         faces = np.stack(plydata["face"].data["vertex_indices"], axis=0)
         return vertices, faces
 
-
 def to_bounding_boxes(masks):
 
     """
@@ -160,13 +159,14 @@ def plot_bounding_boxes(image_path, bboxes, labels, output_path):
     """
     image = cv2.imread(image_path)
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    if torch.all(bboxes == -1):
+        return None
     for (x1, y1, x2, y2), label in zip(bboxes, labels):
         x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
         color = tuple(random.randint(0, 255) for _ in range(3))
         cv2.rectangle(image_rgb, (x1, y1), (x2, y2), color, 2)
         cv2.putText(image_rgb, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
     cv2.imwrite(output_path, cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR))
-
 
 def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
     """
@@ -201,8 +201,6 @@ def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
 
     return assigned_masks, score_masks
 
-
-
 def plot_mask_2_pixel_map(final_depth_map, name):
     
     plot_mask = final_depth_map.cpu().numpy()
@@ -225,8 +223,7 @@ def plot_mask_2_pixel_map(final_depth_map, name):
     plt.savefig(f'{name}')
     plt.close()
 
-
-def filter_pcd_with_depthmap(points, depth_intrinsic, depth, pose, device):
+def filter_pcd_with_depthmap(points, depth_intrinsic, depth, pose, depth_shift, device):
     """
     :param points: N x 3 format
     :param depth: H x W format
@@ -235,8 +232,7 @@ def filter_pcd_with_depthmap(points, depth_intrinsic, depth, pose, device):
     """
 
     vis_thres = 0.1
-    depth_shift = 1000.0
-    depth_shift = 6553.5
+
     
     fx = depth_intrinsic[0,0]
     fy = depth_intrinsic[1,1]
@@ -428,7 +424,6 @@ def mask_lable_location(all_point, mask_bin, pose_matrix, depth_intrinsic, width
     label_location = (final_box[:, [0, 1]] + final_box[:, [2, 3]]) / 2
     return label_location
 
-
 def calculate_iou_matrix(pred_mask, project_mask):
 
     """
@@ -468,8 +463,6 @@ def normalize_scores(predict_score, predict_list):
     sorted_data = [grouped_data[rank]  for rank in predict_ranks]
     return predict_ranks[0], sorted_data[0]
 
-
-
 def openworld_recognition(gt_masks, predict_label_converted, gt_path, class_counts, classes_of_interest):
     gt_labels = torch.tensor(np.loadtxt(gt_path))
     
@@ -493,9 +486,6 @@ def openworld_recognition(gt_masks, predict_label_converted, gt_path, class_coun
             if true_class == predicted_class:
                 class_counts[true_class]['correct'] += 1
     return class_counts
-
-
-
 
 def display_results(class_counts, classes_of_interest, class_names):
     class_index_to_name = {idx: name for idx, name in zip(classes_of_interest, class_names)}
@@ -523,3 +513,26 @@ def display_results(class_counts, classes_of_interest, class_names):
     print('-' * 42)
     print(f"Overall Accuracy: {overall_accuracy:.3f}" if not np.isnan(overall_accuracy) else "Overall Accuracy: NaN")
 
+def downsample_image(image_path, size=(250, 250)):
+    return Image.open(image_path).resize(size, Image.ANTIALIAS)
+
+def display_snap_image(snap_image_path, size=(250, 250)): 
+    # Get all PNG files in the directory
+    image_files = [f for f in os.listdir(snap_image_path) if f.lower().endswith('png')]
+
+    # Determine grid size
+    grid_size = int(len(image_files) ** 0.5) + (1 if len(image_files) ** 0.5 % 1 > 0 else 0)
+
+    # Plot images in a grid
+    fig, axes = plt.subplots(grid_size, grid_size, figsize=(10, 10))
+    axes = axes.flatten()
+    for ax, image_file in zip(axes, image_files):
+        img = Image.open(os.path.join(snap_image_path, image_file)).resize(size, Image.ANTIALIAS)
+        ax.imshow(img)
+        ax.set_title(f'Angle {image_file.split(".")[0]}', fontsize=10)
+        ax.axis('off')
+
+    for ax in axes[len(image_files):]:
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
