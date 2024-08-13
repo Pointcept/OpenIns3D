@@ -194,7 +194,9 @@ class OpenIns3D:
 
     def initilize_snap_lookup_parameters(self, dataset_name, use_2d = False):
 
+
         if dataset_name in ['scannet', 's3dis', 'replica'] and not (dataset_name == 'replica' and use_2d) and not (dataset_name == 'scannet' and use_2d):
+
             image_width, image_height = 800, 800
             lift_cam, zoomout, remove_lip = 3, 0.1, 1.0
         elif dataset_name == 'stpls3d':
@@ -203,9 +205,11 @@ class OpenIns3D:
         elif dataset_name == 'replica' and use_2d:
             image_width, image_height = 360, 640
             lift_cam, zoomout, remove_lip = 2, 0.1, 0
+
         elif dataset_name == 'scannet' and use_2d:
             image_width, image_height = 480, 640
             lift_cam, zoomout, remove_lip = 2, 0.1, 0
+
 
         self.image_size = [image_width, image_height]
         self.adjust_camera = [lift_cam, zoomout, remove_lip]            

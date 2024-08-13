@@ -190,6 +190,7 @@ python openins3d/main.py --dataset stpls3d --task OVIS --detector odise
 
 ---
 
+
 # Replacing Snap with RGBD
 
 We also evaluate the performance of OpenIns3D when the Snap module is replaced with original RGBD images while keeping the other design intact.
@@ -197,12 +198,14 @@ We also evaluate the performance of OpenIns3D when the Snap module is replaced w
 ### 🗂️ Replica
 
 **🔧 Data Preparation**  
+
 1. Download the Replica dataset and RGBD images:
 
 ```sh
 sh scripts/prepare_replica.sh
 sh scripts/prepare_replica2d.sh
 ```
+
 
 **📊 Open Vocabulary Instance Segmentation**
 
@@ -301,6 +304,6 @@ If you find OpenIns3D and this codebase useful for your research, please cite ou
 
 ```
 
-# Acknowlegement
+# Acknowledgement
 
 The mask proposal model is modified from [Mask3D](https://jonasschult.github.io/Mask3D/), and we heavily used the [easy setup](https://github.com/cvg/Mask3D) version of it for MPM. Thanks again for the great work! 🙌 We also drew inspiration from [LAR](https://github.com/eslambakr/LAR-Look-Around-and-Refer) and [ContrastiveSceneContexts](https://github.com/facebookresearch/ContrastiveSceneContexts) when developing the code. 🚀

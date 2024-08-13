@@ -261,12 +261,14 @@ class Lookup:
 
         return perdiction_collections, score_colletions
 
+
     def lookup_pipelie(self, scan_pc, mask_binary, scene_id, threshold = 0.6, use_2d = False, single_detection = False):    
 
         if hasattr(self, 'YOLOWORLD'):
             bbox = True
             mask2pxiel_map_list = self.mask2pixel_map(scan_pc, mask_binary, scene_id, save_image=True, bbox=bbox, use_depth = use_2d)
             mask, label = self.YOLOWORLD.build_lookup_dict(scene_id, save = True,  single_detection = single_detection)
+
             perdiction_collections, score_colletions = self.assign_label_with_bbox(mask2pxiel_map_list, mask, label, threshold) 
             mask, score = self.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5, single_detection = single_detection)
         elif hasattr(self, 'ODISE'):
@@ -317,7 +319,9 @@ if __name__ == "__main__":
     mask_list = torch.load(mask_path).to_dense().cuda()
     mask2pxiel_map_list = lookup_module.mask2pixel_map(pcd_rgb, mask_list, scene_id, save_image=False, bbox=True)
     mask, label = lookup_module.YOLOWORLD.build_lookup_dict(scene_id, save = True)
+
     perdiction_collections, score_colletions = lookup_module.assign_label_with_bbox(mask2pxiel_map_list, mask, label, 0.5) 
+
     masks, score = lookup_module.multiview_aggregation(perdiction_collections, score_colletions, threshold = 0.5)
 
     all_valid_idx = [i for i in range(len(masks)) if masks[i] != -1]

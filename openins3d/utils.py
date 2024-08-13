@@ -168,6 +168,7 @@ def plot_bounding_boxes(image_path, bboxes, labels, output_path):
         cv2.putText(image_rgb, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
     cv2.imwrite(output_path, cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR))
 
+
 def assign_pred_mask_to_gt(pred_mask, project_mask, threshold):
     """
     pred_mask: [width, heigh, num_image] masks detected in the 2d rendered images
@@ -230,10 +231,7 @@ def filter_pcd_with_depthmap(points, depth_intrinsic, depth, pose, depth_shift, 
     :param intrinsic: 3x3 format
     :return p: N x 2 format
     """
-
     vis_thres = 0.1
-
-    
     fx = depth_intrinsic[0,0]
     fy = depth_intrinsic[1,1]
     cx = depth_intrinsic[0,2]
