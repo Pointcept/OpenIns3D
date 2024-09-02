@@ -94,6 +94,7 @@ Please check the [installation file](installation.md) to install OpenIns3D for:
 1. Execute the following command to set up the Replica dataset, including scene `.ply` files, predicted masks, and ground truth:
 ```sh
 sh scripts/prepare_replica.sh
+sh scripts/prepare_yoloworld.sh 
 ```
 
 **📊 Open Vocabulary Instance Segmentation**:
@@ -204,6 +205,7 @@ We also evaluate the performance of OpenIns3D when the Snap module is replaced w
 ```sh
 sh scripts/prepare_replica.sh
 sh scripts/prepare_replica2d.sh
+sh scripts/prepare_yoloworld.sh 
 ```
 
 
@@ -211,8 +213,6 @@ sh scripts/prepare_replica2d.sh
 
 ```sh
 python openins3d/main.py --dataset replica --task OVIS --detector yoloworld --use_2d true
-python openins3d/main.py --dataset replica --task OVIS --detector yoloworld --use_2d true
-python openins3d/main.py --dataset scannet200 --task OVIS --detector yoloworld --use_2d true
 ```
 
 **📈 Results Log**  

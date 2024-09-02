@@ -98,8 +98,14 @@ class OpenIns3D:
             }
 
             if self.save_vis:
-                self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
-                self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+                if pred_masks.shape[1] == 0 : # no mask in this scene
+                    continue
+                if self.dataset_name == "replica" and self.use_2d:
+                    self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                if self.dataset_name == 's3dis' or self.dataset_name == 'stpls3d':
+                    self.snap.scene_image_rendering(pcd_rgb, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+                else:
+                    self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt])
 
         evaluate(predict_results, f"{dataset_path}/ground_truth/", self.CLASS_LABELS, self.VALID_CLASS_IDS,  f"{self.save_folder}/{self.dataset_name}_final_result.csv")
 
@@ -149,10 +155,15 @@ class OpenIns3D:
 
             scene_pcds.append(torch.from_numpy(pcd_rgb))
 
-            # visualize
             if self.save_vis:
-                self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
-                self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+                if pred_masks.shape[1] == 0 : # no mask in this scene
+                    continue
+                if self.dataset_name == "replica" and self.use_2d:
+                    self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                if self.dataset_name == 's3dis' or self.dataset_name == 'stpls3d':
+                    self.snap.scene_image_rendering(pcd_rgb, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
+                else:
+                    self.snap.scene_image_rendering(scene_path, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt])
 
         evaluate_bbox(predict_results, f"{dataset_path}/ground_truth/", scene_pcds, self.CLASS_LABELS, self.VALID_CLASS_IDS,  f"{self.save_folder}/{self.dataset_name}_final_result.csv")
 

@@ -43,6 +43,7 @@ mim install mmengine==0.10.3
 mim install mmyolo==0.6.0 
 pip install supervision==0.18.0
 pip install transformers==4.38.1
+pip install openai-clip
 # download checkpoints and configs
 sh scripts/prepare_yoloworld.sh 
 
