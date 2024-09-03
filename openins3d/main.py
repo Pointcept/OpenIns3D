@@ -64,14 +64,16 @@ class OpenIns3D:
             if mask_list.size(1) == 0: 
                 predict_results[scene] = {
                 'pred_masks': torch.zeros((1, 0)),
-                'pred_scores': torch.zeros(1),
-                'pred_classes': torch.ones(1, dtype=np.int64)*255}
+                'pred_scores': torch.zeros(0),
+                'pred_classes': torch.ones(0)*255}
                 continue
                 
             if scene in self.finished_scene:
                 print(f"Scene {scene} is already processed")
                 mask_classfication = torch.load(f"{self.save_folder}/{scene}/{scene}_mask_classfication.pt")
                 score = torch.load(f"{self.save_folder}/{scene}/{scene}_score.pt")
+                if self.dataset_name == 'stpls3d':
+                    pcd_rgb = pcd_rgb[0]
             else:
                 print(f"Processing scene {scene}")
                 # snap
@@ -90,7 +92,7 @@ class OpenIns3D:
 
             # evaluate
             pred_masks, pred_scores, pred_class, pred_class_txt = self.filter_results(mask_classfication, score, mask_list)
-
+             
             predict_results[scene] = {
                 'pred_masks': pred_masks if pred_masks.shape[1] > 0 else torch.zeros((1, 0)),
                 'pred_scores':pred_scores if len(pred_masks) > 0 else torch.zeros(1),
@@ -120,14 +122,16 @@ class OpenIns3D:
             if mask_list.size(1) == 0: 
                 predict_results[scene] = {
                 'pred_masks': torch.zeros((1, 0)),
-                'pred_scores': torch.zeros(1),
-                'pred_classes': torch.ones(1, dtype=np.int64)*255}
+                'pred_scores': torch.zeros(0),
+                'pred_classes': torch.ones(0)*255}
                 continue
                 
             if scene in self.finished_scene:
                 print(f"Scene {scene} is already processed")
                 mask_classfication = torch.load(f"{self.save_folder}/{scene}/{scene}_mask_classfication.pt")
                 score = torch.load(f"{self.save_folder}/{scene}/{scene}_score.pt")
+                if self.dataset_name == 'stpls3d':
+                    pcd_rgb = pcd_rgb[0]
             else:
                 print(f"Processing scene {scene}")
                 # snap
@@ -149,8 +153,8 @@ class OpenIns3D:
 
             predict_results[scene] = {
                 'pred_masks': pred_masks if pred_masks.shape[1] > 0 else torch.zeros((1, 0)),
-                'pred_scores':pred_scores if len(pred_masks) > 0 else torch.zeros(1),
-                'pred_classes': pred_class if len(pred_masks) > 0 else torch.ones(1)*255
+                'pred_scores':pred_scores if len(pred_masks) > 0 else torch.zeros(0),
+                'pred_classes': pred_class if len(pred_masks) > 0 else torch.ones(0)*255
             }
 
             scene_pcds.append(torch.from_numpy(pcd_rgb))
@@ -189,8 +193,8 @@ class OpenIns3D:
                     pcd_rgb = pcd_rgb[0]
                 elif self.dataset_name == 's3dis':
                     self.snap.scene_image_rendering(pcd_rgb, scene, mode=["global", "wide", "corner"])
-                # elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
-                #     self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
+                elif self.dataset_name == 'replica' or self.dataset_name == 'scannet':
+                    self.snap.scene_image_rendering(scene_path, scene, mode=["global", "wide", "corner"])
                 # lookup
                 mask_classfication, score = self.lookup.lookup_pipelie(pcd_rgb, mask_list, scene, threshold = 0.5, use_2d = self.use_2d)
                 # log the results
