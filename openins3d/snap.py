@@ -79,6 +79,10 @@ class Snap:
         a = verts
         b = faces
         z_max = scan_pc[:, 2].max()
+
+        if remove_lip >= z_max:
+            remove_lip = 0
+
         idx = a[:, 2] <= z_max - remove_lip
 
         # Crop the vertices and create an index map
@@ -259,7 +263,9 @@ class Snap:
             
             # Remove the lip if needed
             scan_pc_raw = mesh.verts_packed().cpu().numpy()
+            
             mesh, _ = self.get_rid_of_lip(mesh, scan_pc_raw, self.remove_lip)
+
         else:
             data_type = "pcd"
             # if mask is available, colorcode the masks in the mesh
