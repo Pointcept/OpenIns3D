@@ -103,7 +103,7 @@ class OpenIns3D:
                 if pred_masks.shape[1] == 0 : # no mask in this scene
                     continue
                 if self.dataset_name == "replica" and self.use_2d:
-                    self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                    self.snap = Snap([800, 800], [2, 0.1, 1.0], f"{self.save_folder}")
                 if self.dataset_name == 's3dis' or self.dataset_name == 'stpls3d':
                     self.snap.scene_image_rendering(pcd_rgb, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
                 else:
@@ -163,7 +163,7 @@ class OpenIns3D:
                 if pred_masks.shape[1] == 0 : # no mask in this scene
                     continue
                 if self.dataset_name == "replica" and self.use_2d:
-                    self.snap = Snap([800, 800], [3, 0.1, 1.0], f"{self.save_folder}")
+                    self.snap = Snap([800, 800], [2, 0.1, 1.0], f"{self.save_folder}")
                 if self.dataset_name == 's3dis' or self.dataset_name == 'stpls3d':
                     self.snap.scene_image_rendering(pcd_rgb, f"{scene}_vis", mode=["global"], mask=[pred_masks, pred_class_txt]) # Comment this out unless visualization is needed, as it is quite slow.
                 else:
@@ -213,7 +213,7 @@ class OpenIns3D:
         if dataset_name in ['scannet', 's3dis', 'replica'] and not (dataset_name == 'replica' and use_2d) and not (dataset_name == 'scannet' and use_2d):
 
             image_width, image_height = 800, 800
-            lift_cam, zoomout, remove_lip = 3, 0.1, 1.0
+            lift_cam, zoomout, remove_lip = 2, 0.1, 1.0
         elif dataset_name == 'stpls3d':
             image_width, image_height = 1000, 1000
             lift_cam, zoomout, remove_lip = 20, 0.1, 0
